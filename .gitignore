@@ -40,6 +40,7 @@ setup.bat
 
 # Файлы настройки системы
 config.js
+!config.example.js
 
 # Временные файлы
 *.tmp
