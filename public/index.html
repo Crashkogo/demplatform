@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ConsultantPlus - Вход в систему</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-card {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .brand-logo {
+            color: #667eea;
+            font-weight: 700;
+            font-size: 1.8rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px 30px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .form-control {
+            border-radius: 12px;
+            border: 2px solid transparent;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 12px 16px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+            background: white;
+        }
+
+        .input-group-text {
+            background: rgba(102, 126, 234, 0.1);
+            border: 2px solid transparent;
+            border-radius: 12px 0 0 12px;
+        }
+
+        .input-group .form-control {
+            border-radius: 0 12px 12px 0;
+            border-left: none;
+        }
+
+        .alert {
+            border-radius: 12px;
+            border: none;
+        }
+
+        .loading {
+            pointer-events: none;
+        }
+
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-4">
+                <div class="card login-card">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
+                            <h1 class="brand-logo mb-2">
+                                <i class="bi bi-shield-lock"></i>
+                                ConsultantPlus
+                            </h1>
+                            <p class="text-muted">Система управления материалами</p>
+                        </div>
+
+                        <!-- Форма логина -->
+                        <form id="loginForm">
+                            <div class="mb-3">
+                                <label for="login" class="form-label fw-semibold">Логин</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-person"></i>
+                                    </span>
+                                    <input type="text" class="form-control" id="login" name="login"
+                                        placeholder="Введите логин" required autocomplete="username">
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label for="password" class="form-label fw-semibold">Пароль</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="bi bi-lock"></i>
+                                    </span>
+                                    <input type="password" class="form-control" id="password" name="password"
+                                        placeholder="Введите пароль" required autocomplete="current-password">
+                                    <button class="btn btn-outline-secondary" type="button" id="togglePassword"
+                                        style="border-radius: 0 12px 12px 0;">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Алерт для ошибок -->
+                            <div id="alertContainer"></div>
+
+                            <button type="submit" class="btn btn-primary w-100" id="loginBtn">
+                                <span class="login-text">
+                                    <i class="bi bi-box-arrow-in-right me-2"></i>
+                                    Войти в систему
+                                </span>
+                                <span class="loading-text d-none">
+                                    <span class="spinner-border spinner-border-sm me-2" role="status">
+                                        <span class="visually-hidden">Загрузка...</span>
+                                    </span>
+                                    Вход...
+                                </span>
+                            </button>
+                        </form>
+
+                        <div class="text-center mt-4">
+                            <small class="text-muted">
+                                Демо доступ: <strong>admin</strong> / <strong>admin123</strong>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Axios для HTTP запросов -->
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Настройка Axios
+        axios.defaults.baseURL = window.location.origin;
+        axios.defaults.headers.common['Content-Type'] = 'application/json';
+
+        // Элементы DOM
+        const loginForm = document.getElementById('loginForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const alertContainer = document.getElementById('alertContainer');
+        const togglePasswordBtn = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+
+        // Переключение видимости пароля
+        togglePasswordBtn.addEventListener('click', function () {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+
+            const icon = this.querySelector('i');
+            icon.className = type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+        });
+
+        // Функция показа алерта
+        function showAlert(message, type = 'danger') {
+            alertContainer.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    <i class="bi bi-${type === 'danger' ? 'exclamation-triangle' : 'check-circle'} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+        }
+
+        // Функция управления состоянием загрузки
+        function setLoading(isLoading) {
+            const loginText = loginBtn.querySelector('.login-text');
+            const loadingText = loginBtn.querySelector('.loading-text');
+
+            if (isLoading) {
+                loginBtn.classList.add('loading');
+                loginText.classList.add('d-none');
+                loadingText.classList.remove('d-none');
+            } else {
+                loginBtn.classList.remove('loading');
+                loginText.classList.remove('d-none');
+                loadingText.classList.add('d-none');
+            }
+        }
+
+        // Обработка формы логина
+        loginForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const credentials = {
+                login: formData.get('login').trim(),
+                password: formData.get('password')
+            };
+
+            // Базовая валидация
+            if (!credentials.login || !credentials.password) {
+                showAlert('Пожалуйста, заполните все поля');
+                return;
+            }
+
+            setLoading(true);
+            alertContainer.innerHTML = '';
+
+            try {
+                const response = await axios.post('/api/auth/login', credentials);
+
+                if (response.data.success) {
+                    // Сохраняем токен
+                    localStorage.setItem('token', response.data.token);
+                    localStorage.setItem('user', JSON.stringify(response.data.user));
+
+                    showAlert('Успешная авторизация! Перенаправление...', 'success');
+
+                    // Перенаправляем в зависимости от роли
+                    setTimeout(() => {
+                        if (response.data.user.role === 'admin') {
+                            window.location.href = '/admin';
+                        } else {
+                            window.location.href = '/app';
+                        }
+                    }, 1000);
+                } else {
+                    showAlert(response.data.message || 'Ошибка авторизации');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+
+                if (error.response && error.response.data) {
+                    showAlert(error.response.data.message || 'Ошибка авторизации');
+                } else if (error.request) {
+                    showAlert('Ошибка соединения с сервером');
+                } else {
+                    showAlert('Произошла неожиданная ошибка');
+                }
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        // Проверка существующей авторизации при загрузке страницы
+        window.addEventListener('DOMContentLoaded', function () {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+
+            if (token && user) {
+                try {
+                    const userData = JSON.parse(user);
+                    // Перенаправляем авторизованных пользователей
+                    if (userData.role === 'admin') {
+                        window.location.href = '/admin';
+                    } else {
+                        window.location.href = '/app';
+                    }
+                } catch (error) {
+                    // Если данные пользователя повреждены, очищаем localStorage
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                }
+            }
+        });
+
+        // Автозаполнение для демо
+        document.addEventListener('keydown', function (e) {
+            if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                document.getElementById('login').value = 'admin';
+                document.getElementById('password').value = 'admin123';
+            }
+        });
+    </script>
+</body>
+
+</html>

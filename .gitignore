@@ -1,0 +1,63 @@
+# Зависимости
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Файлы конфигурации среды
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Логи
+logs
+*.log
+
+# Папка загрузок (пользовательские файлы)
+uploads/
+
+# SSL сертификаты и ключи
+ssl/
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# Документация кроме основного README
+*.md
+!README.md
+
+# Скрипты настройки и развертывания
+*.bat
+*.sh
+firewall-setup.bat
+network-setup.bat
+setup.bat
+
+# Файлы настройки системы
+config.js
+
+# Временные файлы
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE файлы
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Операционная система
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

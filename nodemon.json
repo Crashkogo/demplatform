@@ -1,0 +1,22 @@
+{
+  "watch": [
+    "server.js",
+    "config.js",
+    "models/",
+    "routes/",
+    "middleware/",
+    ".env"
+  ],
+  "ext": "js,json,env",
+  "ignore": ["node_modules/", "uploads/", "public/", "*.log", "*.md"],
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": 500,
+  "verbose": true,
+  "events": {
+    "start": "echo '🚀 Сервер запускается...'",
+    "restart": "echo '🔄 Сервер перезапускается из-за изменений...'",
+    "crash": "echo '💥 Сервер упал. Ожидание изменений для перезапуска...'"
+  }
+}
