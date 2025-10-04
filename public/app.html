@@ -457,11 +457,102 @@
 
         /* Стили для полноэкранного просмотра документов */
         .fullscreen-document-viewer {
-            width: 100%;
+            width: 100vw;
             height: 100vh;
-            background: #f8f9fa;
+            background: #2c3e50;
             display: flex;
             flex-direction: column;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1050;
+            overflow: hidden;
+        }
+
+        .pdf-controls-wrapper {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+        }
+
+        .pdf-controls-container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .pdf-navigation input[type="number"] {
+            text-align: center;
+            border-radius: 4px;
+        }
+
+        .pdf-navigation input[type="number"]:focus {
+            background: rgba(255, 255, 255, 0.2) !important;
+            border-color: #007bff !important;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+
+        .document-content-wrapper {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 0;
+        }
+
+        .document-scroll-container {
+            overflow: auto;
+            max-height: 100%;
+            max-width: 100%;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        .document-scroll-container:active {
+            cursor: grabbing !important;
+        }
+
+        #pdfCanvas {
+            cursor: grab;
+            transition: transform 0.2s ease;
+            max-width: none;
+            height: auto;
+        }
+
+        #pdfCanvas:active {
+            cursor: grabbing;
+        }
+
+        /* Скрываем полосы прокрутки в Firefox */
+        .document-scroll-container {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+        }
+
+        /* Стилизуем полосы прокрутки в Webkit */
+        .document-scroll-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .document-scroll-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .document-scroll-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .document-scroll-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
         }
 
         .document-toolbar {

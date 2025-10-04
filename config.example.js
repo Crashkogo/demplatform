@@ -9,12 +9,19 @@ module.exports = {
         certPath: process.env.SSL_CERT_PATH || './ssl/cert.pem'
     },
 
-    mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/consultantplus',
-    jwtSecret: process.env.JWT_SECRET || 'CHANGE_THIS_IN_PRODUCTION',
+    // PostgreSQL настройки
+    postgres: {
+        database: process.env.POSTGRES_DB || 'consultantplus',
+        username: process.env.POSTGRES_USER || 'postgres',
+        password: process.env.POSTGRES_PASSWORD || 'postgres',
+        host: process.env.POSTGRES_HOST || 'localhost',
+        port: process.env.POSTGRES_PORT || 5432
+    },
+    jwtSecret: process.env.JWT_SECRET || 'your_super_secret_jwt_key_change_in_production',
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
     uploadsPath: './uploads',
     defaultAdmin: {
         login: process.env.DEFAULT_ADMIN_LOGIN || 'admin',
-        password: process.env.DEFAULT_ADMIN_PASSWORD || 'CHANGE_THIS_PASSWORD'
+        password: process.env.DEFAULT_ADMIN_PASSWORD || 'admin123'
     }
 }; 

@@ -2,9 +2,9 @@
 require('dotenv').config();
 
 const express = require('express');
-const mongoose = require('mongoose');
 const helmet = require('helmet');
 const cors = require('cors');
+const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -24,9 +24,9 @@ if (process.env.NODE_ENV !== 'production') {
 // Импорт конфигурации
 const config = require('./config');
 
-// Импорт моделей
-const User = require('./models/User');
-const Category = require('./models/Category');
+// Импорт моделей и подключения к базе данных
+const { sequelize, User, Category, Material } = require('./models');
+const { testConnection, syncDatabase } = require('./config/database');
 
 // Импорт маршрутов
 const authRoutes = require('./routes/auth');
@@ -57,26 +57,38 @@ app.use(helmet({
             defaultSrc: ["'self'"],
             scriptSrc: [
                 "'self'",
-                "'unsafe-inline'", // Временно для CDN скриптов
+                "'unsafe-inline'", // Для inline скриптов
+                "'unsafe-hashes'", // Для onclick обработчиков
                 "https://code.jquery.com",
                 "https://cdn.jsdelivr.net",
                 "https://cdnjs.cloudflare.com"
             ],
+            scriptSrcAttr: ["'unsafe-inline'"], // Разрешаем inline обработчики событий
             styleSrc: [
                 "'self'",
                 "'unsafe-inline'",
                 "https://cdn.jsdelivr.net",
                 "https://cdnjs.cloudflare.com"
             ],
-            imgSrc: ["'self'", "data:", "blob:"],
-            connectSrc: ["'self'"],
+            imgSrc: [
+                "'self'",
+                "data:",
+                "blob:",
+                "https://cdnjs.cloudflare.com" // Для изображений jsTree
+            ],
+            connectSrc: [
+                "'self'",
+                "https://cdn.jsdelivr.net", // Для source map файлов
+                "https://cdnjs.cloudflare.com" // Для source map файлов
+            ],
             fontSrc: [
                 "'self'",
                 "https://cdn.jsdelivr.net"
             ],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'", "blob:"],
-            frameSrc: ["'self'"]
+            frameSrc: ["'self'"],
+            workerSrc: ["'self'", "blob:"] // Для jsTree workers
         }
     },
     crossOriginEmbedderPolicy: false,
@@ -117,9 +129,35 @@ app.use(cors({
     credentials: true
 }));
 
+// Сжатие ответов
+app.use(compression({
+    filter: (req, res) => {
+        // Не сжимаем файлы, которые уже сжаты или бинарные
+        if (req.headers['x-no-compression'] ||
+            res.getHeader('Content-Type')?.includes('video/') ||
+            res.getHeader('Content-Type')?.includes('image/') ||
+            res.getHeader('Content-Type')?.includes('application/octet-stream')) {
+            return false;
+        }
+        return compression.filter(req, res);
+    }
+}));
+
+// Middleware для логирования запросов (только в development)
+if (process.env.NODE_ENV === 'development') {
+    app.use((req, res, next) => {
+        const start = Date.now();
+        res.on('finish', () => {
+            const duration = Date.now() - start;
+            console.log(`${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+        });
+        next();
+    });
+}
+
 // Парсинг JSON
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ extended: true, limit: '500mb' }));
 
 // Статические файлы
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -166,30 +204,34 @@ app.use((err, req, res, next) => {
 // Функция инициализации базы данных
 const initializeDatabase = async () => {
     try {
-        console.log('🔗 Подключение к MongoDB...');
+        console.log('🔗 Подключение к PostgreSQL...');
 
-        await mongoose.connect(config.mongodbUri, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        });
+        // Тестируем подключение к базе данных
+        const connectionSuccess = await testConnection();
+        if (!connectionSuccess) {
+            throw new Error('Не удалось подключиться к PostgreSQL');
+        }
 
-        console.log('✅ Подключение к MongoDB установлено');
+        // Синхронизируем модели с базой данных
+        console.log('🔄 Синхронизация моделей с базой данных...');
+        await syncDatabase({ alter: true }); // alter: true позволяет обновлять существующие таблицы
+
+        console.log('✅ База данных PostgreSQL готова к работе');
 
         // Создаем администратора по умолчанию
-        const adminExists = await User.findOne({ role: 'admin' });
+        const adminExists = await User.findOne({ where: { role: 'admin' } });
         if (!adminExists) {
-            const defaultAdmin = new User({
+            const defaultAdmin = await User.create({
                 login: config.defaultAdmin.login,
                 password: config.defaultAdmin.password,
                 role: 'admin'
             });
 
-            await defaultAdmin.save();
             console.log(`👤 Создан администратор по умолчанию: ${config.defaultAdmin.login}`);
         }
 
         // Создаем корневые категории для демонстрации
-        const rootCategoriesCount = await Category.countDocuments({ parentId: null });
+        const rootCategoriesCount = await Category.count({ where: { parentId: null } });
         if (rootCategoriesCount === 0) {
             const demoCategories = [
                 { name: 'Документы', description: 'Различные документы и файлы' },
@@ -199,8 +241,7 @@ const initializeDatabase = async () => {
             ];
 
             for (const categoryData of demoCategories) {
-                const category = new Category(categoryData);
-                await category.save();
+                await Category.create(categoryData);
             }
 
             console.log('📁 Созданы демонстрационные категории');
@@ -290,8 +331,8 @@ const startServer = async () => {
             console.log('📤 Получен сигнал SIGTERM, завершение работы...');
             server.close(() => {
                 console.log('🔌 HTTP сервер закрыт');
-                mongoose.connection.close(false, () => {
-                    console.log('📊 Соединение с MongoDB закрыто');
+                sequelize.close().then(() => {
+                    console.log('📊 Соединение с PostgreSQL закрыто');
                     process.exit(0);
                 });
             });
@@ -301,8 +342,8 @@ const startServer = async () => {
             console.log('📤 Получен сигнал SIGINT, завершение работы...');
             server.close(() => {
                 console.log('🔌 HTTP сервер закрыт');
-                mongoose.connection.close(false, () => {
-                    console.log('📊 Соединение с MongoDB закрыто');
+                sequelize.close().then(() => {
+                    console.log('📊 Соединение с PostgreSQL закрыто');
                     process.exit(0);
                 });
             });

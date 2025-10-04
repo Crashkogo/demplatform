@@ -1,172 +1,220 @@
-const mongoose = require('mongoose');
-const path = require('path');
+const { DataTypes, Model } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const materialSchema = new mongoose.Schema({
+class Material extends Model {
+    // Виртуальное поле для определения типа файла на основе MIME-типа
+    get displayType() {
+        const mimeType = this.mimeType;
+
+        if (mimeType.startsWith('video/')) {
+            return 'video';
+        } else if (mimeType.startsWith('image/')) {
+            return 'image';
+        } else if (
+            mimeType.includes('document') ||
+            mimeType.includes('pdf') ||
+            mimeType.includes('word') ||
+            mimeType.includes('excel') ||
+            mimeType.includes('spreadsheet') ||
+            mimeType.includes('presentation') ||
+            mimeType.includes('odt') ||
+            mimeType.includes('ods') ||
+            mimeType.includes('odp')
+        ) {
+            return 'document';
+        } else {
+            return 'other';
+        }
+    }
+
+    // Статический метод для поиска материалов
+    static async search(query, options = {}) {
+        const {
+            categoryId,
+            fileType,
+            limit = 50,
+            offset = 0
+        } = options;
+
+        const whereClause = {
+            isActive: true
+        };
+
+        if (categoryId) {
+            whereClause.categoryId = categoryId;
+        }
+
+        if (fileType) {
+            whereClause.fileType = fileType;
+        }
+
+        if (query) {
+            whereClause[sequelize.Sequelize.Op.or] = [
+                {
+                    title: {
+                        [sequelize.Sequelize.Op.iLike]: `%${query}%`
+                    }
+                },
+                {
+                    description: {
+                        [sequelize.Sequelize.Op.iLike]: `%${query}%`
+                    }
+                },
+                {
+                    tags: {
+                        [sequelize.Sequelize.Op.contains]: [query]
+                    }
+                }
+            ];
+        }
+
+        const result = await this.findAndCountAll({
+            where: whereClause,
+            include: [
+                {
+                    model: sequelize.models.Category,
+                    as: 'category',
+                    attributes: ['id', 'name', 'path']
+                },
+                {
+                    model: sequelize.models.User,
+                    as: 'uploader',
+                    attributes: ['id', 'login']
+                }
+            ],
+            order: [['createdAt', 'DESC']],
+            limit,
+            offset
+        });
+
+        return {
+            materials: result.rows,
+            total: result.count,
+            hasMore: result.count > offset + result.rows.length
+        };
+    }
+
+    // Метод для увеличения счетчика просмотров
+    async incrementView() {
+        await this.increment('viewCount');
+    }
+
+    // Метод для увеличения счетчика скачиваний
+    async incrementDownload() {
+        await this.increment('downloadCount');
+    }
+}
+
+Material.init({
+    id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true
+    },
     title: {
-        type: String,
-        required: true,
-        trim: true,
-        maxlength: 200
+        type: DataTypes.STRING(200),
+        allowNull: false,
+        validate: {
+            notEmpty: true,
+            len: [1, 200]
+        }
     },
     description: {
-        type: String,
-        maxlength: 1000
+        type: DataTypes.TEXT,
+        allowNull: true,
+        validate: {
+            len: [0, 1000]
+        }
     },
     filename: {
-        type: String,
-        required: true
+        type: DataTypes.STRING(255),
+        allowNull: false
     },
     originalName: {
-        type: String,
-        required: true
+        type: DataTypes.STRING(255),
+        allowNull: false
     },
     filePath: {
-        type: String,
-        required: true
+        type: DataTypes.STRING(500),
+        allowNull: false
     },
     fileSize: {
-        type: Number,
-        required: true
+        type: DataTypes.BIGINT,
+        allowNull: false
     },
     mimeType: {
-        type: String,
-        required: true
+        type: DataTypes.STRING(100),
+        allowNull: false
     },
     fileType: {
-        type: String,
-        required: true,
-        enum: ['video', 'image', 'document', 'other']
+        type: DataTypes.ENUM('video', 'image', 'document', 'other'),
+        allowNull: false
     },
     categoryId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Category',
-        required: true
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+            model: 'categories',
+            key: 'id'
+        }
     },
-    accessRoles: [{
-        type: String,
-        enum: ['admin', 'client'],
-        default: ['client']
-    }],
     uploadedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+            model: 'users',
+            key: 'id'
+        }
     },
     downloadCount: {
-        type: Number,
-        default: 0
+        type: DataTypes.INTEGER,
+        defaultValue: 0
     },
     viewCount: {
-        type: Number,
-        default: 0
+        type: DataTypes.INTEGER,
+        defaultValue: 0
     },
     isActive: {
-        type: Boolean,
-        default: true
+        type: DataTypes.BOOLEAN,
+        defaultValue: true
     },
-    tags: [{
-        type: String,
-        trim: true
-    }]
+    tags: {
+        type: DataTypes.JSON,
+        defaultValue: []
+    }
 }, {
-    timestamps: true
-});
-
-// Индексы для оптимизации поиска
-materialSchema.index({ categoryId: 1, isActive: 1 });
-materialSchema.index({ title: 'text', description: 'text', tags: 'text' });
-materialSchema.index({ fileType: 1 });
-materialSchema.index({ accessRoles: 1 });
-
-// Виртуальное поле для определения типа файла на основе MIME-типа
-materialSchema.virtual('displayType').get(function () {
-    const mimeType = this.mimeType;
-
-    if (mimeType.startsWith('video/')) {
-        return 'video';
-    } else if (mimeType.startsWith('image/')) {
-        return 'image';
-    } else if (
-        mimeType.includes('document') ||
-        mimeType.includes('pdf') ||
-        mimeType.includes('word') ||
-        mimeType.includes('excel') ||
-        mimeType.includes('spreadsheet') ||
-        mimeType.includes('presentation') ||
-        mimeType.includes('odt') ||
-        mimeType.includes('ods') ||
-        mimeType.includes('odp')
-    ) {
-        return 'document';
-    } else {
-        return 'other';
+    sequelize,
+    modelName: 'Material',
+    tableName: 'materials',
+    timestamps: true,
+    indexes: [
+        {
+            fields: ['categoryId', 'isActive']
+        },
+        {
+            fields: ['fileType']
+        },
+        {
+            fields: ['isActive', 'categoryId', 'createdAt']
+        },
+        {
+            fields: ['isActive', 'fileType', 'createdAt']
+        },
+        {
+            fields: ['isActive', 'categoryId', 'fileType', 'createdAt']
+        },
+        {
+            fields: ['title']
+        }
+    ],
+    hooks: {
+        beforeSave: (material) => {
+            // Определяем тип файла перед сохранением
+            if (material.isNewRecord || material.changed('mimeType')) {
+                material.fileType = material.displayType;
+            }
+        }
     }
 });
 
-// Middleware для определения типа файла перед сохранением
-materialSchema.pre('save', function (next) {
-    if (this.isNew || this.isModified('mimeType')) {
-        this.fileType = this.displayType;
-    }
-    next();
-});
-
-// Статический метод для поиска материалов
-materialSchema.statics.search = async function (query, options = {}) {
-    const {
-        categoryId,
-        fileType,
-        limit = 50,
-        skip = 0
-    } = options;
-
-    const searchQuery = {
-        isActive: true
-    };
-
-    if (categoryId) {
-        searchQuery.categoryId = categoryId;
-    }
-
-    if (fileType) {
-        searchQuery.fileType = fileType;
-    }
-
-    if (query) {
-        searchQuery.$or = [
-            { title: new RegExp(query, 'i') },
-            { description: new RegExp(query, 'i') },
-            { tags: new RegExp(query, 'i') }
-        ];
-    }
-
-    const materials = await this.find(searchQuery)
-        .populate('categoryId', 'name path')
-        .populate('uploadedBy', 'login')
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .skip(skip)
-        .lean();
-
-    const total = await this.countDocuments(searchQuery);
-
-    return {
-        materials,
-        total,
-        hasMore: total > skip + materials.length
-    };
-};
-
-// Метод для увеличения счетчика просмотров
-materialSchema.methods.incrementView = async function () {
-    this.viewCount += 1;
-    return this.save();
-};
-
-// Метод для увеличения счетчика скачиваний
-materialSchema.methods.incrementDownload = async function () {
-    this.downloadCount += 1;
-    return this.save();
-};
-
-module.exports = mongoose.model('Material', materialSchema); 
+module.exports = Material;

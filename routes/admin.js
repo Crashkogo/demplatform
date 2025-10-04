@@ -1,8 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const User = require('../models/User');
-const Material = require('../models/Material');
-const Category = require('../models/Category');
+const { User, Material, Category, sequelize } = require('../models');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
@@ -25,37 +23,59 @@ const userValidation = [
 router.get('/stats', [authenticateToken, requireAdmin], async (req, res) => {
     try {
         // Статистика пользователей
-        const totalUsers = await User.countDocuments();
-        const adminUsers = await User.countDocuments({ role: 'admin' });
-        const clientUsers = await User.countDocuments({ role: 'client' });
+        const totalUsers = await User.count();
+        const adminUsers = await User.count({ where: { role: 'admin' } });
+        const clientUsers = await User.count({ where: { role: 'client' } });
 
         // Статистика категорий
-        const totalCategories = await Category.countDocuments({ isActive: true });
-        const rootCategories = await Category.countDocuments({ parentId: null, isActive: true });
+        const totalCategories = await Category.count({ where: { isActive: true } });
+        const rootCategories = await Category.count({ where: { parentId: null, isActive: true } });
 
         // Статистика материалов
-        const totalMaterials = await Material.countDocuments({ isActive: true });
-        const materialsByType = await Material.aggregate([
-            { $match: { isActive: true } },
-            { $group: { _id: '$fileType', count: { $sum: 1 } } }
-        ]);
+        const totalMaterials = await Material.count({ where: { isActive: true } });
+        const materialsByType = await Material.findAll({
+            where: { isActive: true },
+            attributes: [
+                'fileType',
+                [sequelize.fn('COUNT', sequelize.col('fileType')), 'count']
+            ],
+            group: ['fileType']
+        });
 
-        // Популярные материалы - упрощаем запрос
-        const popularMaterials = await Material.find({ isActive: true })
-            .sort({ viewCount: -1 })
-            .limit(5)
-            .populate('categoryId', 'name')
-            .select('title viewCount downloadCount categoryId')
-            .lean();
+        // Популярные материалы
+        const popularMaterials = await Material.findAll({
+            where: { isActive: true },
+            attributes: ['id', 'title', 'viewCount', 'downloadCount', 'categoryId'],
+            include: [
+                {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['id', 'name']
+                }
+            ],
+            order: [['viewCount', 'DESC']],
+            limit: 5
+        });
 
-        // Недавно загруженные материалы - упрощаем запрос  
-        const recentMaterials = await Material.find({ isActive: true })
-            .sort({ createdAt: -1 })
-            .limit(5)
-            .populate('categoryId', 'name')
-            .populate('uploadedBy', 'login')
-            .select('title createdAt categoryId uploadedBy fileType')
-            .lean();
+        // Недавно загруженные материалы
+        const recentMaterials = await Material.findAll({
+            where: { isActive: true },
+            attributes: ['id', 'title', 'createdAt', 'categoryId', 'uploadedBy', 'fileType'],
+            include: [
+                {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['id', 'name']
+                },
+                {
+                    model: User,
+                    as: 'uploader',
+                    attributes: ['id', 'login']
+                }
+            ],
+            order: [['createdAt', 'DESC']],
+            limit: 5
+        });
 
         const stats = {
             users: {
@@ -70,11 +90,11 @@ router.get('/stats', [authenticateToken, requireAdmin], async (req, res) => {
             materials: {
                 total: totalMaterials,
                 byType: materialsByType.reduce((acc, item) => {
-                    acc[item._id] = item.count;
+                    acc[item.fileType] = parseInt(item.dataValues.count);
                     return acc;
                 }, {}),
-                popular: popularMaterials || [],
-                recent: recentMaterials || []
+                popular: popularMaterials.map(m => m.toJSON()),
+                recent: recentMaterials.map(m => m.toJSON())
             }
         };
 
@@ -97,18 +117,20 @@ router.get('/users', [authenticateToken, requireAdmin], async (req, res) => {
     try {
         const { page = 1, limit = 20, search } = req.query;
 
-        let query = {};
+        const whereClause = {};
         if (search) {
-            query.login = new RegExp(search, 'i');
+            whereClause.login = {
+                [sequelize.Sequelize.Op.iLike]: `%${search}%`
+            };
         }
 
-        const users = await User.find(query)
-            .select('-password')
-            .sort({ createdAt: -1 })
-            .limit(parseInt(limit))
-            .skip((parseInt(page) - 1) * parseInt(limit));
-
-        const total = await User.countDocuments(query);
+        const { rows: users, count: total } = await User.findAndCountAll({
+            where: whereClause,
+            attributes: { exclude: ['password'] },
+            order: [['createdAt', 'DESC']],
+            limit: parseInt(limit),
+            offset: (parseInt(page) - 1) * parseInt(limit)
+        });
 
         res.json({
             success: true,
@@ -144,7 +166,7 @@ router.post('/users', [authenticateToken, requireAdmin, ...userValidation], asyn
         const { login, password, role } = req.body;
 
         // Проверяем, существует ли пользователь с таким логином
-        const existingUser = await User.findOne({ login });
+        const existingUser = await User.findOne({ where: { login } });
         if (existingUser) {
             return res.status(400).json({
                 success: false,
@@ -180,7 +202,7 @@ router.put('/users/:id', [authenticateToken, requireAdmin], async (req, res) => 
         const { id } = req.params;
         const { login, role, password } = req.body;
 
-        const user = await User.findById(id);
+        const user = await User.findByPk(id);
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -190,7 +212,7 @@ router.put('/users/:id', [authenticateToken, requireAdmin], async (req, res) => 
 
         // Проверяем логин на уникальность (если он изменяется)
         if (login && login !== user.login) {
-            const existingUser = await User.findOne({ login });
+            const existingUser = await User.findOne({ where: { login } });
             if (existingUser) {
                 return res.status(400).json({
                     success: false,
@@ -237,7 +259,7 @@ router.delete('/users/:id', [authenticateToken, requireAdmin], async (req, res) 
             });
         }
 
-        const user = await User.findById(id);
+        const user = await User.findByPk(id);
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -265,40 +287,24 @@ router.get('/materials', [authenticateToken, requireAdmin], async (req, res) => 
     try {
         const { page = 1, limit = 20, search, categoryId, fileType } = req.query;
 
-        let query = { isActive: true };
+        const options = {
+            categoryId,
+            fileType,
+            limit: parseInt(limit),
+            skip: (parseInt(page) - 1) * parseInt(limit)
+        };
 
-        if (search) {
-            query.$or = [
-                { title: new RegExp(search, 'i') },
-                { description: new RegExp(search, 'i') }
-            ];
-        }
-
-        if (categoryId) {
-            query.categoryId = categoryId;
-        }
-
-        if (fileType) {
-            query.fileType = fileType;
-        }
-
-        const materials = await Material.find(query)
-            .populate('categoryId', 'name')
-            .populate('uploadedBy', 'login')
-            .sort({ createdAt: -1 })
-            .limit(parseInt(limit))
-            .skip((parseInt(page) - 1) * parseInt(limit));
-
-        const total = await Material.countDocuments(query);
+        // Используем оптимизированный метод поиска из модели
+        const result = await Material.search(search, options);
 
         res.json({
             success: true,
-            data: materials,
+            data: result.materials,
             pagination: {
-                total,
+                total: result.total,
                 page: parseInt(page),
                 limit: parseInt(limit),
-                hasMore: total > parseInt(page) * parseInt(limit)
+                hasMore: result.hasMore
             }
         });
     } catch (error) {

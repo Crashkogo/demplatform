@@ -164,6 +164,12 @@ function initializeModalHandlers() {
     document.getElementById('categoryModal').addEventListener('hidden.bs.modal', function () {
         resetCategoryForm();
     });
+
+    // Материалы
+    document.getElementById('saveMaterialBtn').addEventListener('click', saveMaterial);
+    document.getElementById('materialModal').addEventListener('hidden.bs.modal', function () {
+        resetMaterialForm();
+    });
 }
 
 // Отображение раздела
@@ -331,10 +337,10 @@ function renderUsers(users) {
             <td>${createdDate}</td>
             <td>${lastLogin}</td>
             <td>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="editUser('${user._id}')">
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="editUser(${user.id})">
                     <i class="bi bi-pencil"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user._id}')">
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})">
                     <i class="bi bi-trash"></i>
                 </button>
             </td>
@@ -359,10 +365,10 @@ function searchUsers(query) {
 
 // Редактирование пользователя
 function editUser(userId) {
-    const user = allUsers.find(u => u._id === userId);
+    const user = allUsers.find(u => u.id === userId);
     if (!user) return;
 
-    document.getElementById('userId').value = user._id;
+    document.getElementById('userId').value = user.id;
     document.getElementById('userLogin').value = user.login;
     document.getElementById('userPassword').value = '';
     document.getElementById('userPassword').required = false;
@@ -376,7 +382,7 @@ function editUser(userId) {
 
 // Удаление пользователя
 async function deleteUser(userId) {
-    const user = allUsers.find(u => u._id === userId);
+    const user = allUsers.find(u => u.id === userId);
     if (!user) return;
 
     if (!confirm(`Вы уверены, что хотите удалить пользователя "${user.login}"?`)) {
@@ -475,7 +481,7 @@ function renderCategories(categories) {
 
     categories.forEach(category => {
         const row = document.createElement('tr');
-        const parentName = categories.find(c => c._id === category.parentId)?.name || '-';
+        const parentName = categories.find(c => c.id === category.parentId)?.name || '-';
 
         row.innerHTML = `
             <td>${'  '.repeat(category.level)}${category.name}</td>
@@ -488,10 +494,10 @@ function renderCategories(categories) {
                 </span>
             </td>
             <td>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="editCategory('${category._id}')">
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="editCategory(${category.id})">
                     <i class="bi bi-pencil"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory('${category._id}')">
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory(${category.id})">
                     <i class="bi bi-trash"></i>
                 </button>
             </td>
@@ -502,10 +508,10 @@ function renderCategories(categories) {
 
 // Редактирование категории
 function editCategory(categoryId) {
-    const category = allCategories.find(c => c._id === categoryId);
+    const category = allCategories.find(c => c.id === categoryId);
     if (!category) return;
 
-    document.getElementById('categoryId').value = category._id;
+    document.getElementById('categoryId').value = category.id;
     document.getElementById('categoryName').value = category.name;
     document.getElementById('categoryParent').value = category.parentId || '';
     document.getElementById('categoryDescription').value = category.description || '';
@@ -519,7 +525,7 @@ function editCategory(categoryId) {
 
 // Удаление категории
 async function deleteCategory(categoryId) {
-    const category = allCategories.find(c => c._id === categoryId);
+    const category = allCategories.find(c => c.id === categoryId);
     if (!category) return;
 
     if (!confirm(`Вы уверены, что хотите удалить категорию "${category.name}"?`)) {
@@ -575,7 +581,21 @@ async function saveCategory() {
         }
     } catch (error) {
         console.error('Ошибка сохранения категории:', error);
-        showError(error.response?.data?.message || 'Ошибка сохранения категории');
+
+        let errorMessage = 'Ошибка сохранения категории';
+
+        if (error.response?.data) {
+            const data = error.response.data;
+
+            // Если есть детальные ошибки валидации, показываем их
+            if (data.errors && Array.isArray(data.errors)) {
+                errorMessage = data.errors.map(err => err.msg || err.message).join(', ');
+            } else if (data.message) {
+                errorMessage = data.message;
+            }
+        }
+
+        showError(errorMessage);
     }
 }
 
@@ -605,7 +625,7 @@ function updateCategorySelects() {
         // Добавляем категории
         allCategories.forEach(category => {
             const option = document.createElement('option');
-            option.value = category._id;
+            option.value = category.id;
             option.textContent = '  '.repeat(category.level) + category.name;
             select.appendChild(option);
         });
@@ -652,7 +672,7 @@ function renderMaterials(materials) {
                     ${material.title}
                 </div>
             </td>
-            <td>${material.categoryId?.name || 'Без категории'}</td>
+            <td>${material.category?.name || material.categoryId?.name || 'Без категории'}</td>
             <td>
                 <span class="badge bg-${getFileTypeColor(material.fileType)}">
                     ${getFileTypeText(material.fileType)}
@@ -662,10 +682,13 @@ function renderMaterials(materials) {
             <td><span class="badge bg-info">${material.viewCount || 0}</span></td>
             <td><span class="badge bg-success">${material.downloadCount || 0}</span></td>
             <td>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="viewMaterial('${material._id}')">
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="viewMaterial(${material.id})">
                     <i class="bi bi-eye"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteMaterial('${material._id}')">
+                <button class="btn btn-sm btn-outline-secondary me-1" onclick="editMaterial(${material.id})">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteMaterial(${material.id})">
                     <i class="bi bi-trash"></i>
                 </button>
             </td>
@@ -674,35 +697,47 @@ function renderMaterials(materials) {
     });
 }
 
-// Поиск материалов
-function searchMaterials() {
-    const query = document.getElementById('materialSearch').value.toLowerCase();
-    const categoryFilter = document.getElementById('materialCategoryFilter').value;
-    const typeFilter = document.getElementById('materialTypeFilter').value;
+// Поиск материалов (теперь серверная фильтрация)
+async function searchMaterials() {
+    try {
+        const query = document.getElementById('materialSearch').value.trim();
+        const categoryFilter = document.getElementById('materialCategoryFilter').value;
+        const typeFilter = document.getElementById('materialTypeFilter').value;
 
-    let filtered = allMaterials;
+        const params = {
+            page: 1,
+            limit: 1000 // Админ видит все материалы
+        };
 
-    if (query) {
-        filtered = filtered.filter(material =>
-            material.title.toLowerCase().includes(query) ||
-            material.description?.toLowerCase().includes(query)
-        );
+        if (query) {
+            params.search = query;
+        }
+
+        if (categoryFilter) {
+            params.categoryId = categoryFilter;
+        }
+
+        if (typeFilter) {
+            params.fileType = typeFilter;
+        }
+
+        const response = await axios.get('/api/admin/materials', { params });
+
+        if (response.data.success) {
+            allMaterials = response.data.data;
+            renderMaterials(allMaterials);
+        } else {
+            showError(response.data.message);
+        }
+    } catch (error) {
+        console.error('Ошибка поиска материалов:', error);
+        showError('Ошибка поиска материалов');
     }
-
-    if (categoryFilter) {
-        filtered = filtered.filter(material => material.categoryId?._id === categoryFilter);
-    }
-
-    if (typeFilter) {
-        filtered = filtered.filter(material => material.fileType === typeFilter);
-    }
-
-    renderMaterials(filtered);
 }
 
 // Удаление материала
 async function deleteMaterial(materialId) {
-    const material = allMaterials.find(m => m._id === materialId);
+    const material = allMaterials.find(m => m.id === materialId);
     if (!material) return;
 
     if (!confirm(`Вы уверены, что хотите удалить материал "${material.title}"?`)) {
@@ -820,7 +855,7 @@ function initializeDropzone() {
         <div class="dz-message" data-dz-message>
             <i class="bi bi-cloud-upload fs-1 text-muted mb-3"></i><br>
             Перетащите файл сюда или нажмите для выбора
-            <p class="text-muted mt-2">Поддерживаются: видео, изображения, документы (до 100MB)</p>
+            <p class="text-muted mt-2">Поддерживаются: видео, изображения, документы (до 500MB)</p>
         </div>
     `;
 
@@ -834,7 +869,7 @@ function initializeDropzone() {
             autoProcessQueue: false,
             uploadMultiple: false,
             maxFiles: 1,
-            maxFilesize: 100,
+            maxFilesize: 500,
             acceptedFiles: 'video/*,image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.txt',
             addRemoveLinks: true,
             clickable: true,
@@ -945,16 +980,6 @@ async function handleUpload(e) {
 
     console.log('Данные формы:', { title, categoryId, description, tags });
 
-    // Получаем роли доступа
-    const accessRoles = [];
-    if (document.getElementById('accessAdmin').checked) {
-        accessRoles.push('admin');
-    }
-    if (document.getElementById('accessClient').checked) {
-        accessRoles.push('client');
-    }
-
-    console.log('Роли доступа:', accessRoles);
 
     // Валидация
     if (!title) {
@@ -967,10 +992,6 @@ async function handleUpload(e) {
         return;
     }
 
-    if (accessRoles.length === 0) {
-        showError('Выберите хотя бы одну роль доступа');
-        return;
-    }
 
     try {
         const uploadBtn = document.getElementById('uploadBtn');
@@ -982,7 +1003,6 @@ async function handleUpload(e) {
         formData.append('title', title);
         formData.append('categoryId', categoryId);
         formData.append('description', description);
-        formData.append('accessRoles', JSON.stringify(accessRoles));
 
         if (tags) {
             const tagsArray = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
@@ -1035,7 +1055,6 @@ async function handleUpload(e) {
 // Сброс формы загрузки
 function resetUploadForm() {
     document.getElementById('uploadForm').reset();
-    document.getElementById('accessClient').checked = true;
     dropzone.removeAllFiles();
 }
 
@@ -1101,10 +1120,123 @@ function viewMaterial(materialId) {
     window.open(url, '_blank');
 }
 
+// Редактирование материала
+function editMaterial(materialId) {
+    const material = allMaterials.find(m => m.id === materialId);
+    if (!material) {
+        console.error('Материал не найден:', materialId);
+        return;
+    }
+
+    console.log('Редактируем материал:', material);
+
+    document.getElementById('materialId').value = material.id;
+    document.getElementById('materialEditTitle').value = material.title;
+    document.getElementById('materialEditDescription').value = material.description || '';
+
+    // Обновляем список категорий в селекте
+    updateMaterialCategorySelect();
+
+    // Устанавливаем значение категории (может быть как объект, так и просто ID)
+    const catId = material.category?.id || material.categoryId?.id || material.categoryId || '';
+    console.log('ID категории материала:', catId, 'Структура category:', material.category, 'categoryId:', material.categoryId);
+
+    document.getElementById('materialEditCategory').value = catId;
+
+    document.getElementById('materialModalTitle').textContent = 'Редактировать материал';
+
+    const modal = new bootstrap.Modal(document.getElementById('materialModal'));
+    modal.show();
+}
+
+// Сохранение материала
+async function saveMaterial() {
+    try {
+        const materialId = document.getElementById('materialId').value;
+        const title = document.getElementById('materialEditTitle').value.trim();
+        const categoryId = document.getElementById('materialEditCategory').value;
+        const description = document.getElementById('materialEditDescription').value.trim();
+
+        if (!title) {
+            showError('Введите название материала');
+            return;
+        }
+
+        if (!categoryId) {
+            showError('Выберите категорию');
+            return;
+        }
+
+        const materialData = { title, categoryId, description };
+
+        const response = await axios.put(`/api/materials/${materialId}`, materialData);
+
+        if (response.data.success) {
+            showSuccess(response.data.message);
+            bootstrap.Modal.getInstance(document.getElementById('materialModal')).hide();
+            await loadMaterials();
+        } else {
+            showError(response.data.message);
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения материала:', error);
+
+        let errorMessage = 'Ошибка сохранения материала';
+
+        if (error.response?.data) {
+            const data = error.response.data;
+            errorMessage = data.message || errorMessage;
+        }
+
+        showError(errorMessage);
+    }
+}
+
+// Сброс формы материала
+function resetMaterialForm() {
+    document.getElementById('materialEditForm').reset();
+    document.getElementById('materialId').value = '';
+    document.getElementById('materialModalTitle').textContent = 'Редактировать материал';
+}
+
+// Обновление селекта категорий для материала
+function updateMaterialCategorySelect() {
+    const select = document.getElementById('materialEditCategory');
+    if (!select) {
+        console.error('Элемент materialEditCategory не найден');
+        return;
+    }
+
+    console.log('Обновляем список категорий для материала, всего категорий:', allCategories.length);
+
+    // Сохраняем текущее значение
+    const currentValue = select.value;
+
+    // Очищаем опции (кроме первой)
+    while (select.children.length > 1) {
+        select.removeChild(select.lastChild);
+    }
+
+    // Добавляем категории
+    allCategories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.id;
+        option.textContent = '  '.repeat(category.level || 0) + category.name;
+        select.appendChild(option);
+    });
+
+    console.log('Добавлено опций:', select.children.length - 1);
+
+    // Восстанавливаем значение
+    select.value = currentValue;
+    console.log('Установлено значение:', select.value);
+}
+
 // Глобальные функции для использования в HTML
 window.editUser = editUser;
 window.deleteUser = deleteUser;
 window.editCategory = editCategory;
 window.deleteCategory = deleteCategory;
+window.editMaterial = editMaterial;
 window.deleteMaterial = deleteMaterial;
 window.viewMaterial = viewMaterial; 

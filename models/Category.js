@@ -1,146 +1,192 @@
-const mongoose = require('mongoose');
+const { DataTypes, Model } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const categorySchema = new mongoose.Schema({
+class Category extends Model {
+    // Статический метод для получения дерева категорий
+    static async getTree() {
+        const categories = await this.findAll({
+            where: { isActive: true },
+            order: [['level', 'ASC'], ['order', 'ASC'], ['name', 'ASC']]
+        });
+
+        const categoryMap = {};
+        const tree = [];
+
+        // Создаем карту всех категорий
+        categories.forEach(cat => {
+            const categoryData = cat.toJSON();
+            categoryMap[categoryData.id] = { ...categoryData, children: [] };
+        });
+
+        // Строим дерево
+        categories.forEach(cat => {
+            const categoryData = cat.toJSON();
+            const parentId = categoryData.parentId;
+
+            if (parentId && categoryMap[parentId]) {
+                categoryMap[parentId].children.push(categoryMap[categoryData.id]);
+            } else {
+                tree.push(categoryMap[categoryData.id]);
+            }
+        });
+
+        return tree;
+    }
+
+    // Статический метод для получения всех потомков категории
+    static async getDescendants(categoryId) {
+        const category = await this.findByPk(categoryId);
+        if (!category) return [];
+
+        const descendants = await this.findAll({
+            where: {
+                path: {
+                    [sequelize.Sequelize.Op.like]: `${category.path}/%`
+                }
+            }
+        });
+
+        return descendants;
+    }
+}
+
+Category.init({
+    id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true
+    },
     name: {
-        type: String,
-        required: true,
-        trim: true,
-        maxlength: 100
+        type: DataTypes.STRING(100),
+        allowNull: false,
+        validate: {
+            notEmpty: true,
+            len: [1, 100]
+        }
     },
     parentId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Category',
-        default: null
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'categories',
+            key: 'id'
+        }
     },
     path: {
-        type: String
+        type: DataTypes.STRING(500),
+        allowNull: true
     },
     level: {
-        type: Number,
-        required: true,
-        default: 0
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0
     },
     order: {
-        type: Number,
-        default: 0
+        type: DataTypes.INTEGER,
+        defaultValue: 0
     },
     description: {
-        type: String,
-        maxlength: 500
+        type: DataTypes.TEXT,
+        allowNull: true,
+        validate: {
+            len: [0, 500]
+        }
     },
     isActive: {
-        type: Boolean,
-        default: true
+        type: DataTypes.BOOLEAN,
+        defaultValue: true
+    },
+    accessRoles: {
+        type: DataTypes.JSON,
+        defaultValue: ['client']
     }
 }, {
-    timestamps: true
-});
-
-// Индексы для оптимизации запросов
-categorySchema.index({ parentId: 1, order: 1 });
-categorySchema.index({ path: 1 });
-categorySchema.index({ name: 'text', description: 'text' });
-
-// Middleware для автоматического создания пути и уровня
-categorySchema.pre('save', async function (next) {
-    if (this.isNew) {
-        // Для новых категорий устанавливаем уровень
-        if (this.parentId) {
-            const parent = await mongoose.model('Category').findById(this.parentId);
-            if (parent) {
-                this.level = parent.level + 1;
-            } else {
-                this.level = 0;
-            }
-        } else {
-            this.level = 0;
+    sequelize,
+    modelName: 'Category',
+    tableName: 'categories',
+    timestamps: true,
+    indexes: [
+        {
+            fields: ['parentId', 'order']
+        },
+        {
+            fields: ['path']
+        },
+        {
+            fields: ['name']
+        },
+        {
+            fields: ['isActive']
         }
-    } else if (this.isModified('parentId')) {
-        // Для существующих категорий при изменении родителя
-        if (this.parentId) {
-            const parent = await mongoose.model('Category').findById(this.parentId);
-            if (parent) {
-                this.path = `${parent.path}/${this._id}`;
-                this.level = parent.level + 1;
-            } else {
-                this.path = `/${this._id}`;
-                this.level = 0;
+    ],
+    hooks: {
+        beforeSave: async (category) => {
+            // Для новых категорий устанавливаем уровень
+            if (category.isNewRecord) {
+                if (category.parentId) {
+                    const parent = await Category.findByPk(category.parentId);
+                    if (parent) {
+                        category.level = parent.level + 1;
+                    } else {
+                        category.level = 0;
+                    }
+                } else {
+                    category.level = 0;
+                }
+            } else if (category.changed('parentId')) {
+                // Для существующих категорий при изменении родителя
+                if (category.parentId) {
+                    const parent = await Category.findByPk(category.parentId);
+                    if (parent) {
+                        category.path = `${parent.path}/${category.id}`;
+                        category.level = parent.level + 1;
+                    } else {
+                        category.path = `/${category.id}`;
+                        category.level = 0;
+                    }
+                } else {
+                    category.path = `/${category.id}`;
+                    category.level = 0;
+                }
             }
-        } else {
-            this.path = `/${this._id}`;
-            this.level = 0;
+        },
+        afterSave: async (category) => {
+            // Устанавливаем путь после получения id
+            if (category.isNewRecord || !category.path) {
+                let newPath;
+                if (category.parentId) {
+                    const parent = await Category.findByPk(category.parentId);
+                    if (parent) {
+                        newPath = `${parent.path}/${category.id}`;
+                    } else {
+                        newPath = `/${category.id}`;
+                    }
+                } else {
+                    newPath = `/${category.id}`;
+                }
+
+                // Обновляем путь в базе данных
+                await Category.update(
+                    { path: newPath },
+                    { where: { id: category.id } }
+                );
+
+                // Обновляем текущий объект
+                category.path = newPath;
+            }
         }
     }
-    next();
 });
 
-// Middleware для обновления пути после сохранения новой категории
-categorySchema.post('save', async function (doc) {
-    if (this.isNew || !doc.path) {
-        // Устанавливаем путь после получения _id
-        let newPath;
-        if (doc.parentId) {
-            const parent = await mongoose.model('Category').findById(doc.parentId);
-            if (parent) {
-                newPath = `${parent.path}/${doc._id}`;
-            } else {
-                newPath = `/${doc._id}`;
-            }
-        } else {
-            newPath = `/${doc._id}`;
-        }
-
-        // Обновляем путь в базе данных
-        await mongoose.model('Category').updateOne(
-            { _id: doc._id },
-            { path: newPath }
-        );
-
-        // Обновляем текущий документ
-        doc.path = newPath;
-    }
+// Определяем связи
+Category.belongsTo(Category, { 
+    as: 'parent', 
+    foreignKey: 'parentId' 
 });
 
-// Статический метод для получения дерева категорий
-categorySchema.statics.getTree = async function () {
-    const categories = await this.find({ isActive: true })
-        .sort({ level: 1, order: 1, name: 1 })
-        .lean();
+Category.hasMany(Category, { 
+    as: 'children', 
+    foreignKey: 'parentId' 
+});
 
-    const categoryMap = {};
-    const tree = [];
-
-    // Создаем карту всех категорий (используем строковые ID)
-    categories.forEach(cat => {
-        const catId = cat._id.toString();
-        categoryMap[catId] = { ...cat, children: [] };
-    });
-
-    // Строим дерево
-    categories.forEach(cat => {
-        const catId = cat._id.toString();
-        const parentId = cat.parentId ? cat.parentId.toString() : null;
-
-        if (parentId && categoryMap[parentId]) {
-            categoryMap[parentId].children.push(categoryMap[catId]);
-        } else {
-            tree.push(categoryMap[catId]);
-        }
-    });
-
-    return tree;
-};
-
-// Статический метод для получения всех потомков категории
-categorySchema.statics.getDescendants = async function (categoryId) {
-    const category = await this.findById(categoryId);
-    if (!category) return [];
-
-    const descendants = await this.find({
-        path: new RegExp(`^${category.path}/`)
-    }).lean();
-
-    return descendants;
-};
-
-module.exports = mongoose.model('Category', categorySchema); 
+module.exports = Category;

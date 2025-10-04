@@ -1,10 +1,16 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const Category = require('../models/Category');
-const Material = require('../models/Material');
+const { Category, Material } = require('../models');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Простой кэш для категорий (в продакшене лучше использовать Redis)
+let categoriesCache = {
+    data: null,
+    timestamp: null,
+    ttl: 5 * 60 * 1000 // 5 минут
+};
 
 // Валидаторы
 const categoryValidation = [
@@ -18,15 +24,39 @@ const categoryValidation = [
         .withMessage('Описание не может превышать 500 символов')
         .trim(),
     body('parentId')
+        .optional({ checkFalsy: true, nullable: true })
+        .custom((value) => {
+            // Обрабатываем все варианты "пустого" значения
+            if (value === '' || value === null || value === undefined || value === 'undefined' || value === 'null') {
+                return true;
+            }
+            const parsed = parseInt(value);
+            if (isNaN(parsed) || parsed <= 0) {
+                throw new Error('Некорректный ID родительской категории');
+            }
+            return true;
+        }),
+    body('order')
         .optional()
-        .isMongoId()
-        .withMessage('Некорректный ID родительской категории')
+        .isInt({ min: 0 })
+        .withMessage('Порядок должен быть положительным числом')
 ];
 
-// GET /api/categories - Получение дерева категорий
+// Функция для инвалидации кэша категорий
+function invalidateCategoriesCache() {
+    categoriesCache.data = null;
+    categoriesCache.timestamp = null;
+}
+
+// GET /api/categories - Получение дерева категорий (временно без кэширования)
 router.get('/', authenticateToken, async (req, res) => {
     try {
+        console.log('Запрос категорий от пользователя:', req.user.login);
+
+        // Загружаем из БД без кэширования для отладки
         const tree = await Category.getTree();
+
+        console.log('Найдено категорий:', tree.length);
 
         res.json({
             success: true,
@@ -44,9 +74,10 @@ router.get('/', authenticateToken, async (req, res) => {
 // GET /api/categories/flat - Получение плоского списка категорий
 router.get('/flat', authenticateToken, async (req, res) => {
     try {
-        const categories = await Category.find({ isActive: true })
-            .sort({ level: 1, order: 1, name: 1 })
-            .lean();
+        const categories = await Category.findAll({
+            where: { isActive: true },
+            order: [['level', 'ASC'], ['order', 'ASC'], ['name', 'ASC']]
+        });
 
         res.json({
             success: true,
@@ -66,7 +97,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
 
-        const category = await Category.findById(id);
+        const category = await Category.findByPk(id);
         if (!category) {
             return res.status(404).json({
                 success: false,
@@ -93,7 +124,7 @@ router.get('/:id/materials', authenticateToken, async (req, res) => {
         const { id } = req.params;
         const { search, page = 1, limit = 20 } = req.query;
 
-        const category = await Category.findById(id);
+        const category = await Category.findByPk(id);
         if (!category) {
             return res.status(404).json({
                 success: false,
@@ -132,8 +163,11 @@ router.get('/:id/materials', authenticateToken, async (req, res) => {
 // POST /api/categories - Создание новой категории (только админ)
 router.post('/', [authenticateToken, requireAdmin, ...categoryValidation], async (req, res) => {
     try {
+        console.log('Создание категории - полученные данные:', req.body);
+
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
+            console.log('Ошибки валидации при создании категории:', errors.array());
             return res.status(400).json({
                 success: false,
                 message: 'Ошибки валидации',
@@ -141,11 +175,22 @@ router.post('/', [authenticateToken, requireAdmin, ...categoryValidation], async
             });
         }
 
-        const { name, description, parentId, order } = req.body;
+        const { name, description } = req.body;
+        let { parentId, order } = req.body;
+
+        // Нормализуем parentId - пустые строки превращаем в null
+        if (parentId === '' || parentId === undefined || parentId === null || parentId === 'undefined' || parentId === 'null') {
+            parentId = null;
+        } else {
+            parentId = parseInt(parentId);
+        }
+
+        // Нормализуем order
+        order = order ? parseInt(order) : 0;
 
         // Проверяем, существует ли родительская категория
         if (parentId) {
-            const parentCategory = await Category.findById(parentId);
+            const parentCategory = await Category.findByPk(parentId);
             if (!parentCategory) {
                 return res.status(400).json({
                     success: false,
@@ -154,14 +199,22 @@ router.post('/', [authenticateToken, requireAdmin, ...categoryValidation], async
             }
         }
 
-        const category = new Category({
+        const category = await Category.create({
             name,
             description,
             parentId: parentId || null,
             order: order || 0
         });
 
-        await category.save();
+        // Инвалидируем кэш категорий
+        invalidateCategoriesCache();
+
+        console.log('Категория успешно создана:', {
+            id: category.id,
+            name: category.name,
+            parentId: category.parentId,
+            level: category.level
+        });
 
         res.status(201).json({
             success: true,
@@ -197,9 +250,20 @@ router.put('/:id', [authenticateToken, requireAdmin, ...categoryValidation], asy
         }
 
         const { id } = req.params;
-        const { name, description, parentId, order, isActive } = req.body;
+        const { name, description, isActive } = req.body;
+        let { parentId, order } = req.body;
 
-        const category = await Category.findById(id);
+        // Нормализуем parentId - пустые строки превращаем в null
+        if (parentId === '' || parentId === undefined || parentId === null || parentId === 'undefined' || parentId === 'null') {
+            parentId = null;
+        } else {
+            parentId = parseInt(parentId);
+        }
+
+        // Нормализуем order
+        order = order !== undefined ? parseInt(order) : undefined;
+
+        const category = await Category.findByPk(id);
         if (!category) {
             return res.status(404).json({
                 success: false,
@@ -217,7 +281,7 @@ router.put('/:id', [authenticateToken, requireAdmin, ...categoryValidation], asy
 
         // Проверяем, существует ли родительская категория
         if (parentId && parentId !== category.parentId?.toString()) {
-            const parentCategory = await Category.findById(parentId);
+            const parentCategory = await Category.findByPk(parentId);
             if (!parentCategory) {
                 return res.status(400).json({
                     success: false,
@@ -234,6 +298,9 @@ router.put('/:id', [authenticateToken, requireAdmin, ...categoryValidation], asy
         category.isActive = isActive !== undefined ? isActive : category.isActive;
 
         await category.save();
+
+        // Инвалидируем кэш категорий
+        invalidateCategoriesCache();
 
         res.json({
             success: true,
@@ -254,7 +321,7 @@ router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
     try {
         const { id } = req.params;
 
-        const category = await Category.findById(id);
+        const category = await Category.findByPk(id);
         if (!category) {
             return res.status(404).json({
                 success: false,
@@ -263,7 +330,7 @@ router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
         }
 
         // Проверяем, есть ли дочерние категории
-        const childCategories = await Category.find({ parentId: id });
+        const childCategories = await Category.findAll({ where: { parentId: id } });
         if (childCategories.length > 0) {
             return res.status(400).json({
                 success: false,
@@ -272,7 +339,7 @@ router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
         }
 
         // Проверяем, есть ли материалы в категории
-        const materialsCount = await Material.countDocuments({ categoryId: id, isActive: true });
+        const materialsCount = await Material.count({ where: { categoryId: id, isActive: true } });
         if (materialsCount > 0) {
             return res.status(400).json({
                 success: false,
@@ -280,7 +347,10 @@ router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
             });
         }
 
-        await Category.findByIdAndDelete(id);
+        await category.destroy();
+
+        // Инвалидируем кэш категорий
+        invalidateCategoriesCache();
 
         res.json({
             success: true,

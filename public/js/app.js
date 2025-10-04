@@ -207,6 +207,7 @@ async function loadCategories() {
 
         if (response.data.success) {
             console.log('Загружено категорий:', response.data.data.length);
+            console.log('Данные категорий:', response.data.data);
             initializeCategoryTree(response.data.data);
         } else {
             console.error('Ошибка загрузки категорий от сервера:', response.data.message);
@@ -224,7 +225,22 @@ async function loadCategories() {
 
 // Инициализация дерева категорий
 function initializeCategoryTree(categories) {
+    console.log('Инициализируем дерево категорий с данными:', categories);
+
+    // Проверяем, что jsTree загружен
+    if (!window.$ || !$.fn.jstree) {
+        console.error('jsTree не загружен!');
+        return;
+    }
+
     const treeData = convertToJsTreeFormat(categories);
+    console.log('Данные для jsTree:', treeData);
+
+    // Проверяем, что элементы дерева существуют
+    const desktopTree = $('#categoryTree');
+    const mobileTree = $('#categoryTreeMobile');
+    console.log('Элемент desktop дерева найден:', desktopTree.length > 0);
+    console.log('Элемент mobile дерева найден:', mobileTree.length > 0);
 
     // Инициализация десктопного дерева
     $('#categoryTree').jstree({
@@ -298,7 +314,7 @@ function initializeCategoryTree(categories) {
 // Конвертация данных для jsTree
 function convertToJsTreeFormat(categories) {
     return categories.map(category => ({
-        id: category._id,
+        id: category.id,
         text: category.name,
         icon: 'bi bi-folder',
         children: category.children ? convertToJsTreeFormat(category.children) : [],
@@ -362,8 +378,6 @@ function updateBreadcrumb(categoryId) {
 // Загрузка материалов
 async function loadMaterials(append = false) {
     try {
-        console.log('Загружаем материалы, append:', append, 'currentCategoryId:', currentCategoryId);
-
         if (!append) {
             showLoader('materialsLoader', true);
             currentPage = 1;
@@ -388,16 +402,10 @@ async function loadMaterials(append = false) {
             params.search = searchQuery;
         }
 
-        console.log('Параметры запроса:', params);
-        console.log('Текущий пользователь и токен:', { user: currentUser, hasToken: !!currentToken });
-
         const response = await axios.get('/api/materials', { params });
-
-        console.log('Ответ от сервера:', response.data);
 
         if (response.data.success) {
             const materials = response.data.data;
-            console.log('Загружено материалов:', materials.length);
 
             if (append) {
                 allMaterials = [...allMaterials, ...materials];
@@ -412,10 +420,11 @@ async function loadMaterials(append = false) {
 
             // Обновляем кнопку "Загрузить ещё"
             const loadMoreBtn = document.getElementById('loadMoreBtn');
-            loadMoreBtn.style.display = hasMoreMaterials ? 'block' : 'none';
+            if (loadMoreBtn) {
+                loadMoreBtn.style.display = hasMoreMaterials ? 'block' : 'none';
+            }
 
         } else {
-            console.error('Ошибка от сервера:', response.data.message);
             throw new Error(response.data.message);
         }
     } catch (error) {
@@ -500,10 +509,10 @@ function createMaterialCard(material) {
                 <p class="compact-material-meta">${createdDate} • ${fileSize}</p>
             </div>
             <div class="compact-material-actions">
-                <button class="btn btn-outline-primary compact-btn" onclick="viewMaterial('${material._id}')" title="Просмотр">
+                <button class="btn btn-outline-primary compact-btn" onclick="viewMaterial(${material.id})" title="Просмотр">
                     <i class="bi bi-eye"></i>
                 </button>
-                <button class="btn btn-outline-success compact-btn" onclick="downloadMaterial('${material._id}')" title="Скачать">
+                <button class="btn btn-outline-success compact-btn" onclick="downloadMaterial(${material.id})" title="Скачать">
                     <i class="bi bi-download"></i>
                 </button>
             </div>
@@ -524,7 +533,7 @@ function createMaterialCard(material) {
                         </div>
                         <div class="flex-grow-1">
                             <h6 class="card-title mb-1">${material.title}</h6>
-                            <small class="text-muted">${material.categoryId?.name || 'Без категории'}</small>
+                            <small class="text-muted">${material.category?.name || 'Без категории'}</small>
                         </div>
                     </div>
                     
@@ -543,10 +552,10 @@ function createMaterialCard(material) {
                 </div>
                 <div class="card-footer bg-transparent">
                     <div class="d-flex gap-2">
-                        <button class="btn btn-outline-primary btn-sm flex-grow-1" onclick="viewMaterial('${material._id}')">
+                        <button class="btn btn-outline-primary btn-sm flex-grow-1" onclick="viewMaterial(${material.id})">
                             <i class="bi bi-eye me-1"></i>Просмотр
                         </button>
-                        <button class="btn btn-outline-success btn-sm" onclick="downloadMaterial('${material._id}')">
+                        <button class="btn btn-outline-success btn-sm" onclick="downloadMaterial(${material.id})">
                             <i class="bi bi-download"></i>
                         </button>
                     </div>
@@ -597,7 +606,13 @@ async function viewMaterial(materialId) {
 
 // Показ модального окна с материалом
 function showMaterialModal(material) {
-    const modal = new bootstrap.Modal(document.getElementById('materialModal'));
+    const modalElement = document.getElementById('materialModal');
+    const modal = new bootstrap.Modal(modalElement);
+
+    // Добавляем обработчик закрытия модального окна
+    modalElement.addEventListener('hidden.bs.modal', function () {
+        removePDFKeyboardHandlers();
+    }, { once: true });
     const modalTitle = document.getElementById('modalTitle');
     const modalBody = document.getElementById('modalBody');
     const downloadBtn = document.getElementById('downloadBtn');
@@ -605,7 +620,7 @@ function showMaterialModal(material) {
     modalTitle.textContent = material.title;
 
     // Удаляем старые обработчики и добавляем новый для скачивания
-    downloadBtn.onclick = () => downloadMaterial(material._id);
+    downloadBtn.onclick = () => downloadMaterial(material.id);
 
     let bodyContent = '';
 
@@ -655,20 +670,35 @@ function showMaterialModal(material) {
             // Полноэкранный PDF просмотрщик
             bodyContent = `
                 <div class="fullscreen-document-viewer">
-                    <div class="pdf-controls">
-                        <button type="button" class="btn btn-outline-light btn-sm" onclick="zoomPDF('out', '${material._id}')">
-                            <i class="bi bi-zoom-out"></i> Уменьшить
+                    <div class="pdf-controls-wrapper d-flex justify-content-between align-items-center mb-2">
+                        <button type="button" class="btn btn-outline-light btn-sm" onclick="closePDFViewer()" title="Закрыть (Escape)">
+                            <i class="bi bi-x-lg"></i>
                         </button>
-                        <button type="button" class="btn btn-outline-light btn-sm" onclick="zoomPDF('reset', '${material._id}')">
-                            <i class="bi bi-arrows-fullscreen"></i> По размеру
-                        </button>
-                        <button type="button" class="btn btn-outline-light btn-sm" onclick="zoomPDF('in', '${material._id}')">
-                            <i class="bi bi-zoom-in"></i> Увеличить
-                        </button>
-                        <span class="text-white ms-3" id="pdfInfo">Загрузка...</span>
+                        <div class="pdf-controls-container d-flex align-items-center gap-3">
+                            <div class="pdf-info d-flex align-items-center">
+                                <span class="text-white" id="totalPagesSpan">Страниц: 1</span>
+                            </div>
+                            <div class="pdf-zoom d-flex align-items-center">
+                                <button type="button" class="btn btn-outline-light btn-sm" onclick="zoomPDF('out')" title="Уменьшить (Ctrl + -)">
+                                    <i class="bi bi-dash-lg"></i>
+                                </button>
+                                <span class="text-white mx-2" id="zoomInfo" style="min-width: 50px; text-align: center;">100%</span>
+                                <button type="button" class="btn btn-outline-light btn-sm" onclick="zoomPDF('in')" title="Увеличить (Ctrl + +)">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-light btn-sm ms-2" onclick="zoomPDF('reset')" title="100% масштаб (Ctrl + 0)">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="width: 40px;"></div> <!-- Балансировка для центрирования -->
                     </div>
-                    <div class="document-content d-flex justify-content-center" style="padding: 0;">
-                        <canvas id="pdfCanvas"></canvas>
+                    <div class="document-content-wrapper" style="flex: 1; overflow: hidden; display: flex; justify-content: center; align-items: flex-start;">
+                        <div class="document-scroll-container" id="pdfScrollContainer" style="overflow: auto; max-height: 100%; max-width: 100%; cursor: grab;">
+                            <div id="pdfPagesContainer" style="display: flex; flex-direction: column; gap: 20px; padding: 20px;">
+                                <!-- PDF страницы будут добавлены здесь -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -693,7 +723,7 @@ function showMaterialModal(material) {
             bodyContent = `
                 <div class="fullscreen-document-viewer">
                     <div class="document-content" style="padding: 0;">
-                        <iframe src="/api/materials/${material._id}/view" 
+                        <iframe src="/api/materials/${material.id}/view" 
                                 title="${material.title}">
                         </iframe>
                     </div>
@@ -738,9 +768,9 @@ function showMaterialModal(material) {
     if (material.fileType === 'document') {
         loadDocumentContent(material);
     } else if (material.fileType === 'image') {
-        loadImageContent(material._id);
+        loadImageContent(material.id);
     } else if (material.fileType === 'video') {
-        loadVideoContent(material._id, material.mimeType);
+        loadVideoContent(material.id, material.mimeType);
     }
 }
 
@@ -995,6 +1025,7 @@ window.selectCategoryMobile = selectCategoryMobile;
 window.viewMaterial = viewMaterial;
 window.downloadMaterial = downloadMaterial;
 window.zoomPDF = zoomPDF;
+window.closePDFViewer = closePDFViewer;
 window.toggleMobileCategoryTree = toggleMobileCategoryTree;
 
 // Загрузка видео с авторизацией
@@ -1121,15 +1152,15 @@ async function loadDocumentContent(material) {
     const isText = material.mimeType.includes('text/') || material.originalName?.toLowerCase().includes('.txt');
 
     if (isPDF) {
-        await loadPDFDocument(material._id);
+        await loadPDFDocument(material.id);
     } else if (isDOCX) {
-        await loadDOCXDocument(material._id);
+        await loadDOCXDocument(material.id);
     } else if (isText) {
-        await loadTextDocument(material._id);
+        await loadTextDocument(material.id);
     }
 }
 
-// Загрузка PDF документа с PDF.js
+// Загрузка PDF документа с PDF.js - отображение всех страниц
 async function loadPDFDocument(materialId) {
     try {
         console.log('Загружаем PDF документ:', materialId);
@@ -1137,9 +1168,8 @@ async function loadPDFDocument(materialId) {
         // Настраиваем PDF.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        const canvas = document.getElementById('pdfCanvas');
-        const context = canvas.getContext('2d');
-        const pdfInfo = document.getElementById('pdfInfo');
+        const pagesContainer = document.getElementById('pdfPagesContainer');
+        const scrollContainer = document.getElementById('pdfScrollContainer');
 
         // Загружаем PDF
         const response = await fetch(`/api/materials/${materialId}/view`, {
@@ -1157,39 +1187,36 @@ async function loadPDFDocument(materialId) {
 
         console.log('PDF загружен, страниц:', pdf.numPages);
 
-        // Определяем оптимальный масштаб для полноэкранного просмотра
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.0 });
+        // Используем масштаб 100% по умолчанию
+        const optimalScale = 1.0;
 
-        // Вычисляем масштаб для подгонки под экран (с небольшим отступом)
-        const maxWidth = window.innerWidth * 0.9;
-        const maxHeight = (window.innerHeight - 150) * 0.9; // Учитываем панель управления
+        // Отображаем информацию о документе
+        const totalPagesSpan = document.getElementById('totalPagesSpan');
+        const zoomInfo = document.getElementById('zoomInfo');
 
-        const scaleX = maxWidth / viewport.width;
-        const scaleY = maxHeight / viewport.height;
-        const optimalScale = Math.min(scaleX, scaleY, 2.0); // Максимум 200%
+        if (totalPagesSpan) totalPagesSpan.textContent = `Страниц: ${pdf.numPages}`;
+        if (zoomInfo) zoomInfo.textContent = `${Math.round(optimalScale * 100)}%`;
 
-        // Отображаем первую страницу с оптимальным масштабом
-        const scaledViewport = page.getViewport({ scale: optimalScale });
+        // Очищаем контейнер
+        pagesContainer.innerHTML = '';
 
-        canvas.height = scaledViewport.height;
-        canvas.width = scaledViewport.width;
-
-        const renderContext = {
-            canvasContext: context,
-            viewport: scaledViewport
-        };
-
-        await page.render(renderContext).promise;
-
-        pdfInfo.textContent = `Страница 1 из ${pdf.numPages} (${Math.round(optimalScale * 100)}%)`;
+        // Рендерим все страницы
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            await renderPDFPageToContainer(pdf, pageNum, optimalScale, pagesContainer);
+        }
 
         // Сохраняем PDF объект для масштабирования
-        window.currentPDF = { pdf, page: 1, scale: optimalScale };
+        window.currentPDF = { pdf, scale: optimalScale, totalPages: pdf.numPages, allPages: true };
+
+        // Добавляем обработчики для "хвата" документа
+        addPDFDragHandlers(scrollContainer);
+
+        // Добавляем обработчики клавиатуры
+        addPDFKeyboardHandlers();
 
     } catch (error) {
         console.error('Ошибка загрузки PDF:', error);
-        const container = document.querySelector('.document-content');
+        const container = document.querySelector('.document-content-wrapper');
         if (container) {
             container.innerHTML = `
                 <div class="d-flex align-items-center justify-content-center h-100">
@@ -1286,38 +1313,108 @@ async function loadTextDocument(materialId) {
 }
 
 // Функции для управления PDF
-function zoomPDF(action, materialId) {
+function zoomPDF(action) {
     if (!window.currentPDF) return;
 
-    const { pdf, page } = window.currentPDF;
+    const { pdf, allPages } = window.currentPDF;
     let { scale } = window.currentPDF;
 
     switch (action) {
         case 'in':
-            scale *= 1.2;
+            scale = Math.min(scale * 1.2, 5.0); // Максимум 500%
             break;
         case 'out':
-            scale /= 1.2;
+            scale = Math.max(scale * 0.8, 0.25); // Минимум 25%
             break;
         case 'reset':
-            scale = 1.2;
+            // Сбрасываем масштаб к 100%
+            scale = 1.0;
             break;
     }
 
-    // Ограничиваем масштаб
-    scale = Math.max(0.5, Math.min(3.0, scale));
     window.currentPDF.scale = scale;
 
-    // Перерисовываем страницу
-    renderPDFPage(pdf, page, scale);
+    // Обновляем информацию о масштабе
+    const zoomInfo = document.getElementById('zoomInfo');
+    if (zoomInfo) zoomInfo.textContent = `${Math.round(scale * 100)}%`;
+
+    // Перерисовываем все страницы или одну страницу
+    if (allPages) {
+        rerenderAllPDFPages();
+    } else {
+        renderPDFPage(pdf, window.currentPDF.page, scale);
+    }
 }
 
-// Отрисовка страницы PDF
+// Перерисовка всех страниц PDF с новым масштабом
+async function rerenderAllPDFPages() {
+    if (!window.currentPDF || !window.currentPDF.allPages) return;
+
+    const { pdf, scale } = window.currentPDF;
+    const pagesContainer = document.getElementById('pdfPagesContainer');
+
+    if (!pagesContainer) return;
+
+    // Очищаем контейнер
+    pagesContainer.innerHTML = '';
+
+    // Рендерим все страницы с новым масштабом
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        await renderPDFPageToContainer(pdf, pageNum, scale, pagesContainer);
+    }
+
+    console.log('Все страницы перерендерены с масштабом:', Math.round(scale * 100) + '%');
+}
+
+// Рендеринг страницы PDF в контейнер
+async function renderPDFPageToContainer(pdf, pageNum, scale, container) {
+    try {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale });
+
+        // Создаем canvas для страницы
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        canvas.style.cssText = `
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border-radius: 4px;
+            background: white;
+        `;
+
+        // Добавляем номер страницы как data-атрибут
+        canvas.dataset.pageNumber = pageNum;
+
+        const renderContext = {
+            canvasContext: context,
+            viewport: viewport
+        };
+
+        await page.render(renderContext).promise;
+
+        // Добавляем canvas в контейнер
+        container.appendChild(canvas);
+
+        console.log(`Страница ${pageNum} отрендерена`);
+
+    } catch (error) {
+        console.error(`Ошибка рендеринга страницы ${pageNum}:`, error);
+    }
+}
+
+// Отрисовка страницы PDF (для совместимости со старым кодом)
 async function renderPDFPage(pdf, pageNum, scale) {
     try {
         const canvas = document.getElementById('pdfCanvas');
         const context = canvas.getContext('2d');
-        const pdfInfo = document.getElementById('pdfInfo');
+        const currentPageInput = document.getElementById('currentPageInput');
+        const zoomInfo = document.getElementById('zoomInfo');
+        const prevPageBtn = document.getElementById('prevPageBtn');
+        const nextPageBtn = document.getElementById('nextPageBtn');
 
         const page = await pdf.getPage(pageNum);
         const viewport = page.getViewport({ scale });
@@ -1332,11 +1429,230 @@ async function renderPDFPage(pdf, pageNum, scale) {
 
         await page.render(renderContext).promise;
 
-        if (pdfInfo) {
-            pdfInfo.textContent = `Страница ${pageNum} из ${pdf.numPages} (${Math.round(scale * 100)}%)`;
+        // Обновляем UI элементы
+        if (currentPageInput) currentPageInput.value = pageNum;
+        if (zoomInfo) zoomInfo.textContent = `${Math.round(scale * 100)}%`;
+
+        // Обновляем состояние кнопок навигации
+        if (prevPageBtn) prevPageBtn.disabled = pageNum <= 1;
+        if (nextPageBtn) nextPageBtn.disabled = pageNum >= pdf.numPages;
+
+        // Обновляем текущие данные
+        if (window.currentPDF) {
+            window.currentPDF.page = pageNum;
+            window.currentPDF.scale = scale;
         }
 
     } catch (error) {
         console.error('Ошибка отрисовки PDF:', error);
     }
+}
+
+// Изменение страницы PDF
+function changePDFPage(direction) {
+    if (!window.currentPDF) return;
+
+    const { pdf, page, scale, totalPages } = window.currentPDF;
+    const newPage = page + direction;
+
+    if (newPage >= 1 && newPage <= totalPages) {
+        renderPDFPage(pdf, newPage, scale);
+    }
+}
+
+// Переход к конкретной странице
+function goToPage(pageNum) {
+    if (!window.currentPDF) return;
+
+    const { pdf, scale, totalPages } = window.currentPDF;
+    const targetPage = parseInt(pageNum);
+
+    if (targetPage >= 1 && targetPage <= totalPages) {
+        renderPDFPage(pdf, targetPage, scale);
+    } else {
+        // Возвращаем корректное значение в поле ввода
+        const currentPageInput = document.getElementById('currentPageInput');
+        if (currentPageInput) {
+            currentPageInput.value = window.currentPDF.page;
+        }
+    }
+}
+
+// Добавление обработчиков клавиатуры для PDF
+function addPDFKeyboardHandlers() {
+    // Удаляем старые обработчики
+    document.removeEventListener('keydown', handlePDFKeydown);
+
+    // Добавляем новый обработчик
+    document.addEventListener('keydown', handlePDFKeydown);
+}
+
+// Обработка нажатий клавиш для PDF
+function handlePDFKeydown(event) {
+    if (!window.currentPDF) return;
+
+    // Игнорируем, если фокус в поле ввода
+    if (document.activeElement.tagName === 'INPUT') return;
+
+    const container = document.getElementById('pdfScrollContainer');
+
+    switch (event.key) {
+        case 'ArrowUp':
+        case 'PageUp':
+            event.preventDefault();
+            if (container) {
+                container.scrollTop -= container.clientHeight * 0.8;
+            }
+            break;
+        case 'ArrowDown':
+        case 'PageDown':
+            event.preventDefault();
+            if (container) {
+                container.scrollTop += container.clientHeight * 0.8;
+            }
+            break;
+        case 'ArrowLeft':
+            event.preventDefault();
+            if (container) {
+                container.scrollLeft -= 100;
+            }
+            break;
+        case 'ArrowRight':
+            event.preventDefault();
+            if (container) {
+                container.scrollLeft += 100;
+            }
+            break;
+        case 'Home':
+            event.preventDefault();
+            if (container) {
+                container.scrollTop = 0;
+            }
+            break;
+        case 'End':
+            event.preventDefault();
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
+            break;
+        case '+':
+        case '=':
+            if (event.ctrlKey) {
+                event.preventDefault();
+                zoomPDF('in');
+            }
+            break;
+        case '-':
+            if (event.ctrlKey) {
+                event.preventDefault();
+                zoomPDF('out');
+            }
+            break;
+        case '0':
+            if (event.ctrlKey) {
+                event.preventDefault();
+                zoomPDF('reset');
+            }
+            break;
+        case 'Escape':
+            event.preventDefault();
+            closePDFViewer();
+            break;
+    }
+}
+
+// Удаление обработчиков клавиатуры при закрытии PDF
+function removePDFKeyboardHandlers() {
+    document.removeEventListener('keydown', handlePDFKeydown);
+    window.currentPDF = null;
+}
+
+// Закрытие PDF просмотрщика
+function closePDFViewer() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('materialModal'));
+    if (modal) {
+        modal.hide();
+    }
+}
+
+// Добавление обработчиков для "хвата" документа
+function addPDFDragHandlers(container) {
+    let isDragging = false;
+    let startX, startY;
+    let scrollLeft, scrollTop;
+
+    // Обработчики для мыши
+    container.addEventListener('mousedown', (e) => {
+        // Игнорируем правый клик
+        if (e.button !== 0) return;
+
+        isDragging = true;
+        container.style.cursor = 'grabbing';
+
+        startX = e.pageX - container.offsetLeft;
+        startY = e.pageY - container.offsetTop;
+        scrollLeft = container.scrollLeft;
+        scrollTop = container.scrollTop;
+
+        // Предотвращаем выделение текста
+        e.preventDefault();
+    });
+
+    container.addEventListener('mouseleave', () => {
+        isDragging = false;
+        container.style.cursor = 'grab';
+    });
+
+    container.addEventListener('mouseup', () => {
+        isDragging = false;
+        container.style.cursor = 'grab';
+    });
+
+    container.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+
+        e.preventDefault();
+
+        const x = e.pageX - container.offsetLeft;
+        const y = e.pageY - container.offsetTop;
+        const walkX = (x - startX) * 2; // Коэффициент скорости прокрутки
+        const walkY = (y - startY) * 2;
+
+        container.scrollLeft = scrollLeft - walkX;
+        container.scrollTop = scrollTop - walkY;
+    });
+
+    // Обработчики для сенсорных устройств
+    let touchStartX, touchStartY;
+    let touchScrollLeft, touchScrollTop;
+
+    container.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+
+        const touch = e.touches[0];
+        touchStartX = touch.pageX;
+        touchStartY = touch.pageY;
+        touchScrollLeft = container.scrollLeft;
+        touchScrollTop = container.scrollTop;
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 1) return;
+
+        const touch = e.touches[0];
+        const walkX = touchStartX - touch.pageX;
+        const walkY = touchStartY - touch.pageY;
+
+        container.scrollLeft = touchScrollLeft + walkX;
+        container.scrollTop = touchScrollTop + walkY;
+    }, { passive: true });
+
+    // Поддержка колесика мыши для горизонтальной прокрутки
+    container.addEventListener('wheel', (e) => {
+        // Если зажат Shift, прокручиваем горизонтально
+        if (e.shiftKey) {
+            e.preventDefault();
+            container.scrollLeft += e.deltaY;
+        }
+    });
 } 

@@ -1,60 +1,66 @@
-const mongoose = require('mongoose');
+const { DataTypes, Model } = require('sequelize');
 const bcrypt = require('bcrypt');
+const { sequelize } = require('../config/database');
 
-const userSchema = new mongoose.Schema({
+class User extends Model {
+    // Метод для проверки пароля
+    async comparePassword(candidatePassword) {
+        return bcrypt.compare(candidatePassword, this.password);
+    }
+
+    // Метод для получения безопасного объекта пользователя (без пароля)
+    toSafeObject() {
+        const user = this.toJSON();
+        delete user.password;
+        return user;
+    }
+}
+
+User.init({
+    id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true
+    },
     login: {
-        type: String,
-        required: true,
+        type: DataTypes.STRING(50),
+        allowNull: false,
         unique: true,
-        trim: true,
-        minlength: 3,
-        maxlength: 50
+        validate: {
+            len: [3, 50],
+            notEmpty: true
+        }
     },
     password: {
-        type: String,
-        required: true,
-        minlength: 6
+        type: DataTypes.STRING(255),
+        allowNull: false,
+        validate: {
+            len: [6, 255]
+        }
     },
     role: {
-        type: String,
-        required: true,
-        enum: ['admin', 'client'],
-        default: 'client'
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
+        type: DataTypes.ENUM('admin', 'client'),
+        allowNull: false,
+        defaultValue: 'client'
     },
     lastLogin: {
-        type: Date
+        type: DataTypes.DATE,
+        allowNull: true
     }
 }, {
-    timestamps: true
-});
-
-// Хэширование пароля перед сохранением
-userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) return next();
-
-    try {
-        const salt = await bcrypt.genSalt(12);
-        this.password = await bcrypt.hash(this.password, salt);
-        next();
-    } catch (error) {
-        next(error);
+    sequelize,
+    modelName: 'User',
+    tableName: 'users',
+    timestamps: true, // Автоматически добавляет createdAt и updatedAt
+    hooks: {
+        // Хэширование пароля перед сохранением
+        beforeSave: async (user) => {
+            if (user.changed('password')) {
+                const salt = await bcrypt.genSalt(12);
+                user.password = await bcrypt.hash(user.password, salt);
+            }
+        }
     }
 });
 
-// Метод для проверки пароля
-userSchema.methods.comparePassword = async function (candidatePassword) {
-    return bcrypt.compare(candidatePassword, this.password);
-};
-
-// Метод для получения безопасного объекта пользователя (без пароля)
-userSchema.methods.toSafeObject = function () {
-    const user = this.toObject();
-    delete user.password;
-    return user;
-};
-
-module.exports = mongoose.model('User', userSchema); 
+module.exports = User;

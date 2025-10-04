@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const User = require('../models/User');
+const { User } = require('../models');
 const { generateToken, authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -32,7 +32,7 @@ router.post('/login', loginValidation, async (req, res) => {
         const { login, password } = req.body;
 
         // Поиск пользователя
-        const user = await User.findOne({ login });
+        const user = await User.findOne({ where: { login } });
         if (!user) {
             return res.status(401).json({
                 success: false,
@@ -54,7 +54,7 @@ router.post('/login', loginValidation, async (req, res) => {
         await user.save();
 
         // Генерация токена
-        const token = generateToken(user._id);
+        const token = generateToken(user.id);
 
         res.json({
             success: true,

@@ -2,8 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const path = require('path');
 const fs = require('fs');
-const Material = require('../models/Material');
-const Category = require('../models/Category');
+const { Material, Category } = require('../models');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { handleUpload, deleteFile } = require('../middleware/upload');
 
@@ -21,8 +20,15 @@ const materialValidation = [
         .withMessage('Описание не может превышать 1000 символов')
         .trim(),
     body('categoryId')
-        .isMongoId()
-        .withMessage('Некорректный ID категории')
+        .notEmpty()
+        .withMessage('Категория обязательна')
+        .custom((value) => {
+            const parsed = parseInt(value);
+            if (isNaN(parsed) || parsed <= 0) {
+                throw new Error('Некорректный ID категории');
+            }
+            return true;
+        })
 ];
 
 // Функция для определения типа файла по MIME-типу
@@ -63,10 +69,10 @@ router.get('/', authenticateToken, async (req, res) => {
         } = req.query;
 
         const options = {
-            categoryId,
+            categoryId: categoryId ? parseInt(categoryId) : undefined,
             fileType,
             limit: parseInt(limit),
-            skip: (parseInt(page) - 1) * parseInt(limit)
+            offset: (parseInt(page) - 1) * parseInt(limit)
         };
 
         const result = await Material.search(search, options);
@@ -95,9 +101,20 @@ router.get('/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
 
-        const material = await Material.findById(id)
-            .populate('categoryId', 'name path')
-            .populate('uploadedBy', 'login');
+        const material = await Material.findByPk(id, {
+            include: [
+                {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['id', 'name', 'path']
+                },
+                {
+                    model: require('../models').User,
+                    as: 'uploader',
+                    attributes: ['id', 'login']
+                }
+            ]
+        });
 
         if (!material) {
             return res.status(404).json({
@@ -126,7 +143,7 @@ router.get('/:id/view', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
 
-        const material = await Material.findById(id);
+        const material = await Material.findByPk(id);
         if (!material) {
             return res.status(404).json({
                 success: false,
@@ -146,15 +163,39 @@ router.get('/:id/view', authenticateToken, async (req, res) => {
             });
         }
 
-        // Увеличиваем счетчик просмотров
-        await material.incrementView();
+        // Увеличиваем счетчик просмотров (асинхронно, не блокируем просмотр)
+        material.incrementView().catch(err =>
+            console.error('Error incrementing view count:', err)
+        );
+
+        // Получаем статистику файла
+        const stat = fs.statSync(filePath);
+        const fileSize = stat.size;
 
         // Устанавливаем правильные заголовки
         res.setHeader('Content-Type', material.mimeType);
         res.setHeader('Content-Disposition', `inline; filename="${material.originalName}"`);
+        res.setHeader('Content-Length', fileSize);
 
-        // Отправляем файл
-        res.sendFile(filePath);
+        // Поддержка Range requests для видео и больших файлов
+        const range = req.headers.range;
+        if (range && (material.mimeType.startsWith('video/') || fileSize > 10 * 1024 * 1024)) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunksize = (end - start) + 1;
+
+            res.status(206);
+            res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+            res.setHeader('Accept-Ranges', 'bytes');
+            res.setHeader('Content-Length', chunksize);
+
+            const stream = fs.createReadStream(filePath, { start, end });
+            stream.pipe(res);
+        } else {
+            // Для небольших файлов используем обычную отправку
+            res.sendFile(filePath);
+        }
     } catch (error) {
         console.error('View material error:', error);
         res.status(500).json({
@@ -169,7 +210,7 @@ router.get('/:id/download', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
 
-        const material = await Material.findById(id);
+        const material = await Material.findByPk(id);
         if (!material) {
             return res.status(404).json({
                 success: false,
@@ -189,15 +230,40 @@ router.get('/:id/download', authenticateToken, async (req, res) => {
             });
         }
 
-        // Увеличиваем счетчик скачиваний
-        await material.incrementDownload();
+        // Увеличиваем счетчик скачиваний (асинхронно, не блокируем скачивание)
+        material.incrementDownload().catch(err =>
+            console.error('Error incrementing download count:', err)
+        );
+
+        // Получаем статистику файла
+        const stat = fs.statSync(filePath);
+        const fileSize = stat.size;
 
         // Устанавливаем заголовки для скачивания
         res.setHeader('Content-Type', 'application/octet-stream');
         res.setHeader('Content-Disposition', `attachment; filename="${material.originalName}"`);
+        res.setHeader('Content-Length', fileSize);
 
-        // Отправляем файл
-        res.sendFile(filePath);
+        // Поддержка Range requests для больших файлов
+        const range = req.headers.range;
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunksize = (end - start) + 1;
+
+            res.status(206);
+            res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+            res.setHeader('Accept-Ranges', 'bytes');
+            res.setHeader('Content-Length', chunksize);
+
+            const stream = fs.createReadStream(filePath, { start, end });
+            stream.pipe(res);
+        } else {
+            // Отправляем файл полностью
+            const stream = fs.createReadStream(filePath);
+            stream.pipe(res);
+        }
     } catch (error) {
         console.error('Download material error:', error);
         res.status(500).json({
@@ -226,10 +292,11 @@ router.post('/', [authenticateToken, requireAdmin, handleUpload], async (req, re
             });
         }
 
-        const { title, description, categoryId } = req.body;
+        const { title, description } = req.body;
+        const categoryId = parseInt(req.body.categoryId);
 
         // Проверяем существование категории
-        const category = await Category.findById(categoryId);
+        const category = await Category.findByPk(categoryId);
         if (!category) {
             if (req.file) {
                 deleteFile(req.file.path);
@@ -240,45 +307,8 @@ router.post('/', [authenticateToken, requireAdmin, handleUpload], async (req, re
             });
         }
 
-        // Парсим accessRoles и tags из JSON строк
-        let accessRoles = ['client']; // По умолчанию
+        // Парсим tags из JSON строки
         let tags = [];
-
-        console.log('Исходные данные accessRoles:', req.body.accessRoles, 'тип:', typeof req.body.accessRoles);
-
-        if (req.body.accessRoles) {
-            try {
-                accessRoles = typeof req.body.accessRoles === 'string'
-                    ? JSON.parse(req.body.accessRoles)
-                    : req.body.accessRoles;
-
-                console.log('Парсенные accessRoles:', accessRoles);
-
-                // Валидируем роли
-                const validRoles = ['admin', 'client'];
-                if (!Array.isArray(accessRoles) || !accessRoles.every(role => validRoles.includes(role))) {
-                    console.error('Некорректные роли доступа:', accessRoles);
-                    if (req.file) {
-                        deleteFile(req.file.path);
-                    }
-                    return res.status(400).json({
-                        success: false,
-                        message: 'Некорректные роли доступа'
-                    });
-                }
-            } catch (e) {
-                console.error('Ошибка парсинга accessRoles:', e);
-                if (req.file) {
-                    deleteFile(req.file.path);
-                }
-                return res.status(400).json({
-                    success: false,
-                    message: 'Некорректный формат ролей доступа'
-                });
-            }
-        }
-
-        console.log('Финальные accessRoles:', accessRoles);
 
         if (req.body.tags) {
             try {
@@ -300,13 +330,18 @@ router.post('/', [authenticateToken, requireAdmin, handleUpload], async (req, re
             filename: req.file.filename,
             originalName: req.file.originalname,
             categoryId,
-            accessRoles,
             tags,
             fileType: determineFileType(req.file.mimetype),
             mimeType: req.file.mimetype
         });
 
-        const material = new Material({
+        console.log('Материал перед сохранением:', {
+            title,
+            fileType: determineFileType(req.file.mimetype),
+            mimeType: req.file.mimetype
+        });
+
+        const material = await Material.create({
             title,
             description,
             filename: req.file.filename,
@@ -315,30 +350,33 @@ router.post('/', [authenticateToken, requireAdmin, handleUpload], async (req, re
             fileSize: req.file.size,
             mimeType: req.file.mimetype,
             categoryId,
-            accessRoles,
-            uploadedBy: req.user._id,
+            uploadedBy: req.user.id,
             tags,
             fileType: determineFileType(req.file.mimetype)
         });
 
-        console.log('Материал перед сохранением:', {
-            title: material.title,
-            accessRoles: material.accessRoles,
-            fileType: material.fileType,
-            mimeType: material.mimeType
+        console.log('Материал сохранен успешно с ID:', material.id);
+
+        // Получаем материал с связанными данными
+        const materialWithAssociations = await Material.findByPk(material.id, {
+            include: [
+                {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['id', 'name', 'path']
+                },
+                {
+                    model: require('../models').User,
+                    as: 'uploader',
+                    attributes: ['id', 'login']
+                }
+            ]
         });
-
-        await material.save();
-
-        console.log('Материал сохранен успешно с ID:', material._id);
-
-        // Популяция для ответа
-        await material.populate(['categoryId', 'uploadedBy']);
 
         res.status(201).json({
             success: true,
             message: 'Материал загружен успешно',
-            data: material
+            data: materialWithAssociations
         });
     } catch (error) {
         // Удаляем загруженный файл в случае ошибки
@@ -355,21 +393,21 @@ router.post('/', [authenticateToken, requireAdmin, handleUpload], async (req, re
 });
 
 // PUT /api/materials/:id - Обновление материала (только админ)
-router.put('/:id', [authenticateToken, requireAdmin, ...materialValidation], async (req, res) => {
+router.put('/:id', [authenticateToken, requireAdmin], async (req, res) => {
     try {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
+        const { id } = req.params;
+        const { title, description, categoryId } = req.body;
+
+        // Валидация
+        if (!title || !categoryId) {
             return res.status(400).json({
                 success: false,
-                message: 'Ошибки валидации',
-                errors: errors.array()
+                message: 'Название и категория обязательны'
             });
         }
 
-        const { id } = req.params;
-        const { title, description, categoryId, isActive } = req.body;
-
-        const material = await Material.findById(id);
+        // Проверяем, что материал существует
+        const material = await Material.findByPk(id);
         if (!material) {
             return res.status(404).json({
                 success: false,
@@ -377,30 +415,42 @@ router.put('/:id', [authenticateToken, requireAdmin, ...materialValidation], asy
             });
         }
 
-        // Проверяем существование категории
-        if (categoryId !== material.categoryId.toString()) {
-            const category = await Category.findById(categoryId);
-            if (!category) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Категория не найдена'
-                });
-            }
+        // Проверяем, что категория существует
+        const category = await Category.findByPk(categoryId);
+        if (!category) {
+            return res.status(400).json({
+                success: false,
+                message: 'Категория не найдена'
+            });
         }
 
-        // Обновляем поля
+        // Обновляем материал
         material.title = title;
-        material.description = description;
+        material.description = description || '';
         material.categoryId = categoryId;
-        material.isActive = isActive !== undefined ? isActive : material.isActive;
 
         await material.save();
-        await material.populate(['categoryId', 'uploadedBy']);
+
+        // Получаем материал с связанными данными
+        const materialWithAssociations = await Material.findByPk(material.id, {
+            include: [
+                {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['id', 'name', 'path']
+                },
+                {
+                    model: require('../models').User,
+                    as: 'uploader',
+                    attributes: ['id', 'login']
+                }
+            ]
+        });
 
         res.json({
             success: true,
             message: 'Материал обновлен успешно',
-            data: material
+            data: materialWithAssociations
         });
     } catch (error) {
         console.error('Update material error:', error);
@@ -416,7 +466,7 @@ router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
     try {
         const { id } = req.params;
 
-        const material = await Material.findById(id);
+        const material = await Material.findByPk(id);
         if (!material) {
             return res.status(404).json({
                 success: false,
@@ -428,7 +478,7 @@ router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
         deleteFile(material.filePath);
 
         // Удаляем запись из базы данных
-        await Material.findByIdAndDelete(id);
+        await material.destroy();
 
         res.json({
             success: true,

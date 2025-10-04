@@ -637,21 +637,6 @@
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label">Роли доступа *</label>
-                                    <div>
-                                        <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="checkbox" id="accessAdmin"
-                                                value="admin">
-                                            <label class="form-check-label" for="accessAdmin">Администраторы</label>
-                                        </div>
-                                        <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="checkbox" id="accessClient"
-                                                value="client" checked>
-                                            <label class="form-check-label" for="accessClient">Клиенты</label>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 mb-3">
                                     <label for="materialTags" class="form-label">Теги (через запятую)</label>
                                     <input type="text" class="form-control" id="materialTags"
                                         placeholder="тег1, тег2, тег3">
@@ -664,7 +649,7 @@
                                     <div class="dz-message">
                                         <i class="bi bi-cloud-upload display-3 d-block mb-3"></i>
                                         <h5>Перетащите файл сюда или нажмите для выбора</h5>
-                                        <p class="text-muted">Поддерживаются: видео, изображения, документы (до 100MB)
+                                        <p class="text-muted">Поддерживаются: видео, изображения, документы (до 500MB)
                                         </p>
                                     </div>
                                 </div>
@@ -752,6 +737,41 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
                     <button type="button" class="btn btn-primary" id="saveCategoryBtn">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно редактирования материала -->
+    <div class="modal fade" id="materialModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="materialModalTitle">Редактировать материал</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="materialEditForm">
+                        <input type="hidden" id="materialId">
+                        <div class="mb-3">
+                            <label for="materialEditTitle" class="form-label">Название *</label>
+                            <input type="text" class="form-control" id="materialEditTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="materialEditCategory" class="form-label">Категория *</label>
+                            <select class="form-select" id="materialEditCategory" required>
+                                <option value="">Выберите категорию</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="materialEditDescription" class="form-label">Описание</label>
+                            <textarea class="form-control" id="materialEditDescription" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" id="saveMaterialBtn">Сохранить</button>
                 </div>
             </div>
         </div>
