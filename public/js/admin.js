@@ -608,7 +608,7 @@ function resetCategoryForm() {
 
 // Обновление селектов категорий
 function updateCategorySelects() {
-    const selects = ['categoryParent', 'materialCategory', 'materialCategoryFilter'];
+    const selects = ['categoryParent', 'materialCategory', 'materialCategoryFilter', 'materialEditCategory'];
 
     selects.forEach(selectId => {
         const select = document.getElementById(selectId);
@@ -622,11 +622,15 @@ function updateCategorySelects() {
             select.removeChild(select.lastChild);
         }
 
-        // Добавляем категории
+        // Добавляем категории с полным путем
         allCategories.forEach(category => {
             const option = document.createElement('option');
             option.value = category.id;
-            option.textContent = '  '.repeat(category.level) + category.name;
+            
+            // Используем функцию для получения пути
+            const categoryPath = getCategoryPath(category, allCategories);
+            option.textContent = categoryPath;
+            
             select.appendChild(option);
         });
 
@@ -1231,7 +1235,42 @@ function updateMaterialCategorySelect() {
     select.value = currentValue;
     console.log('Установлено значение:', select.value);
 }
-
+// Функция для построения полного пути категории
+// Оптимизированная версия с использованием Map для быстрого поиска
+function getCategoryPath(category, allCategories) {
+    // Создаем Map для быстрого доступа к категориям по ID
+    const categoryMap = new Map();
+    allCategories.forEach(cat => categoryMap.set(cat.id, cat));
+    
+    const path = [];
+    let current = category;
+    
+    // Защита от бесконечного цикла (на случай циклических ссылок)
+    const maxDepth = 10;
+    let depth = 0;
+    
+    // Идем вверх по иерархии
+    while (current && depth < maxDepth) {
+        path.unshift(current.name); // Добавляем в начало массива
+        
+        if (current.parentId) {
+            // Быстрый поиск через Map
+            current = categoryMap.get(current.parentId);
+        } else {
+            current = null;
+        }
+        
+        depth++;
+    }
+    
+    // Если корневая категория - добавляем "*/"
+    if (path.length === 1) {
+        return `*/${path[0]}`;
+    }
+    
+    // Иначе возвращаем полный путь через "/"
+    return path.join('/');
+}
 // Глобальные функции для использования в HTML
 window.editUser = editUser;
 window.deleteUser = deleteUser;

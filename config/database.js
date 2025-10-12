@@ -1,3 +1,5 @@
+// config/database.js
+require('dotenv').config();  // Загружаем .env перед использованием process.env
 const { Sequelize } = require('sequelize');
 
 // Создаем соединение с PostgreSQL
