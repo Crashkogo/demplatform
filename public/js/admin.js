@@ -1057,6 +1057,11 @@ function updateCategorySelects() {
 // Загрузка материалов
 async function loadMaterials() {
     try {
+        // Проверяем и загружаем категории, если их еще нет
+        if (allCategories.length === 0) {
+            await loadCategories();
+        }
+
         const response = await axios.get('/api/admin/materials');
 
         if (response.data.success) {
@@ -1115,6 +1120,20 @@ function renderMaterials(materials) {
             actionsHTML = '<span class="text-muted">—</span>';
         }
 
+        // Получаем полный путь категории
+        const categoryId = material.category?.id || material.categoryId;
+        let categoryPath = 'Без категории';
+
+        if (categoryId) {
+            const category = allCategories.find(c => c.id === categoryId);
+            if (category) {
+                categoryPath = getCategoryPath(category, allCategories);
+            } else if (material.category?.name) {
+                // Резервный вариант, если категория не найдена в общем списке
+                categoryPath = material.category.name;
+            }
+        }
+
         row.innerHTML = `
             <td>
                 <div class="d-flex align-items-center">
@@ -1122,7 +1141,7 @@ function renderMaterials(materials) {
                     ${material.title}
                 </div>
             </td>
-            <td>${material.category?.name || material.categoryId?.name || 'Без категории'}</td>
+            <td>${categoryPath}</td>
             <td>
                 <span class="badge bg-${getFileTypeColor(material.fileType)}">
                     ${getFileTypeText(material.fileType)}
@@ -1662,7 +1681,7 @@ function updateMaterialCategorySelect() {
     allCategories.forEach(category => {
         const option = document.createElement('option');
         option.value = category.id;
-        option.textContent = '  '.repeat(category.level || 0) + category.name;
+        option.textContent = getCategoryPath(category, allCategories);
         select.appendChild(option);
     });
 
