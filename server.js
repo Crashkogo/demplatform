@@ -33,6 +33,7 @@ const authRoutes = require('./routes/auth');
 const categoryRoutes = require('./routes/categories');
 const materialRoutes = require('./routes/materials');
 const adminRoutes = require('./routes/admin');
+const roleRoutes = require('./routes/roles');
 
 const app = express();
 
@@ -168,6 +169,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/roles', roleRoutes);
 
 // Основные HTML страницы
 app.get('/', (req, res) => {
@@ -218,13 +220,42 @@ const initializeDatabase = async () => {
 
         console.log('✅ База данных PostgreSQL готова к работе');
 
-        // Создаем администратора по умолчанию
-        const adminExists = await User.findOne({ where: { role: 'admin' } });
+        // Создаем роль Администратор по умолчанию
+        const { Role } = require('./models');
+        let adminRole = await Role.findOne({ where: { isAdmin: true } });
+
+        if (!adminRole) {
+            adminRole = await Role.create({
+                name: 'Администратор',
+                description: 'Полный доступ ко всем функциям системы',
+                isAdmin: true,
+                canViewMaterials: true,
+                canDownloadMaterials: true,
+                canCreateMaterials: true,
+                canEditMaterials: true,
+                canDeleteMaterials: true,
+                canCreateCategories: true,
+                canEditCategories: true,
+                canDeleteCategories: true,
+                canManageAllCategories: true,
+                categoryAccessType: 'all',
+                canViewUsers: true,
+                canCreateUsers: true,
+                canEditUsers: true,
+                canDeleteUsers: true,
+                canViewLogs: true,
+                canManageRoles: true
+            });
+            console.log('✅ Создана роль "Администратор"');
+        }
+
+        // Создаем пользователя администратора по умолчанию
+        const adminExists = await User.findOne({ where: { login: config.defaultAdmin.login } });
         if (!adminExists) {
             const defaultAdmin = await User.create({
                 login: config.defaultAdmin.login,
                 password: config.defaultAdmin.password,
-                role: 'admin'
+                roleId: adminRole.id
             });
 
             console.log(`👤 Создан администратор по умолчанию: ${config.defaultAdmin.login}`);

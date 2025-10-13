@@ -19,7 +19,8 @@
     "db:reset": "node scripts/reset-db.js",
     "db:status": "node scripts/db-status.js",
     "db:setup": "npm run db:migrate && npm run db:seed",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate:roles": "node scripts/migrate-add-roles.js"
   },
   "keywords": [
     "express",

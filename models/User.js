@@ -1,3 +1,4 @@
+// models/User.js (ОБНОВЛЕННАЯ ВЕРСИЯ)
 const { DataTypes, Model } = require('sequelize');
 const bcrypt = require('bcrypt');
 const { sequelize } = require('../config/database');
@@ -13,6 +14,84 @@ class User extends Model {
         const user = this.toJSON();
         delete user.password;
         return user;
+    }
+
+    // Метод для проверки конкретного права
+    async hasPermission(permission) {
+        // Если есть roleData, проверяем через него
+        if (this.roleData) {
+            return this.roleData.hasPermission(permission);
+        }
+
+        // Если roleId указан, но roleData не загружена - загружаем
+        if (this.roleId && !this.roleData) {
+            const Role = require('./Role');
+            const role = await Role.findByPk(this.roleId);
+            if (role) {
+                return role.hasPermission(permission);
+            }
+        }
+
+        // По умолчанию нет прав
+        return false;
+    }
+
+    // Метод для получения всех прав пользователя
+    async getPermissions() {
+        // Если есть roleData
+        if (this.roleData) {
+            return this.roleData.getPermissions();
+        }
+
+        // Если roleId указан, но roleData не загружена
+        if (this.roleId && !this.roleData) {
+            const Role = require('./Role');
+            const role = await Role.findByPk(this.roleId);
+            if (role) {
+                return role.getPermissions();
+            }
+        }
+
+        // По умолчанию нет прав
+        return {
+            canViewMaterials: false,
+            canDownloadMaterials: false,
+            canCreateMaterials: false,
+            canEditMaterials: false,
+            canDeleteMaterials: false,
+            canCreateCategories: false,
+            canEditCategories: false,
+            canDeleteCategories: false,
+            canManageAllCategories: false,
+            categoryAccessType: 'selected',
+            canViewUsers: false,
+            canCreateUsers: false,
+            canEditUsers: false,
+            canDeleteUsers: false,
+            canViewLogs: false,
+            canManageRoles: false,
+            isAdmin: false
+        };
+    }
+
+    // Метод для получения доступных категорий пользователя
+    async getAccessibleCategories() {
+        // Если есть roleData
+        if (this.roleData) {
+            return await this.roleData.getAccessibleCategories();
+        }
+
+        // Если roleId указан, но roleData не загружена
+        if (this.roleId && !this.roleData) {
+            const Role = require('./Role');
+            const role = await Role.findByPk(this.roleId);
+            if (role) {
+                return await role.getAccessibleCategories();
+            }
+        }
+
+        // По умолчанию нет доступных категорий
+        return [];
     }
 }
 
@@ -38,10 +117,15 @@ User.init({
             len: [6, 255]
         }
     },
-    role: {
-        type: DataTypes.ENUM('admin', 'client'),
+    // Связь с таблицей ролей
+    roleId: {
+        type: DataTypes.INTEGER,
         allowNull: false,
-        defaultValue: 'client'
+        field: 'role_id',
+        references: {
+            model: 'roles',
+            key: 'id'
+        }
     },
     lastLogin: {
         type: DataTypes.DATE,
@@ -51,7 +135,8 @@ User.init({
     sequelize,
     modelName: 'User',
     tableName: 'users',
-    timestamps: true, // Автоматически добавляет createdAt и updatedAt
+    timestamps: true,
+    underscored: true,
     hooks: {
         // Хэширование пароля перед сохранением
         beforeSave: async (user) => {

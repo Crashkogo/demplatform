@@ -149,7 +149,7 @@
 
                         <div class="text-center mt-4">
                             <small class="text-muted">
-                                Демо доступ: <strong>admin</strong> / <strong>admin123</strong>
+                                <!-- Демо доступ: <strong>admin</strong> / <strong>admin123</strong> -->
                             </small>
                         </div>
                     </div>
@@ -162,6 +162,8 @@
     <script src="https://cdn.jsdelivr.net/npm/axios@1.5.0/dist/axios.min.js"></script>
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Permissions Manager -->
+    <script src="/js/permissions.js"></script>
 
     <script>
         // Настройка Axios
@@ -234,17 +236,30 @@
                 const response = await axios.post('/api/auth/login', credentials);
 
                 if (response.data.success) {
-                    // Сохраняем токен
+                    // Сохраняем токен и пользователя
                     localStorage.setItem('token', response.data.token);
                     localStorage.setItem('user', JSON.stringify(response.data.user));
 
+                    // Сохраняем права пользователя
+                    if (response.data.permissions && response.data.accessibleCategoryIds) {
+                        PermissionsManager.setPermissions(
+                            response.data.permissions,
+                            response.data.accessibleCategoryIds
+                        );
+                    }
+
                     showAlert('Успешная авторизация! Перенаправление...', 'success');
 
-                    // Перенаправляем в зависимости от роли
+                    // Перенаправляем в зависимости от прав
                     setTimeout(() => {
-                        if (response.data.user.role === 'admin') {
+                        // Если пользователь может управлять чем-либо в админке - направляем в админку
+                        if (PermissionsManager.isAdmin() ||
+                            PermissionsManager.canViewSection('users') ||
+                            PermissionsManager.canViewSection('roles') ||
+                            PermissionsManager.canViewSection('categories')) {
                             window.location.href = '/admin';
                         } else {
+                            // Иначе в основное приложение
                             window.location.href = '/app';
                         }
                     }, 1000);

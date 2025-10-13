@@ -12,6 +12,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <!-- Dropzone CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/dropzone.min.css" rel="stylesheet">
+    <!-- jsTree CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" />
 
     <!-- Отключение автообнаружения Dropzone -->
     <script>
@@ -356,6 +358,12 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="#" data-section="roles">
+                                <i class="bi bi-person-check me-2"></i>
+                                Роли
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="#" data-section="categories">
                                 <i class="bi bi-folder me-2"></i>
                                 Категории
@@ -510,6 +518,40 @@
                                 <tbody id="usersTableBody">
                                     <tr>
                                         <td colspan="5" class="text-center">
+                                            <div class="spinner-border" role="status"></div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Управление ролями -->
+                    <div id="roles" class="content-section">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h2>
+                                <i class="bi bi-person-check me-2 text-primary"></i>
+                                Роли
+                            </h2>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#roleModal">
+                                <i class="bi bi-plus-circle me-2"></i>
+                                Добавить роль
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Название</th>
+                                        <th>Описание</th>
+                                        <th>Админ</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rolesTableBody">
+                                    <tr>
+                                        <td colspan="4" class="text-center">
                                             <div class="spinner-border" role="status"></div>
                                         </td>
                                     </tr>
@@ -689,8 +731,7 @@
                         <div class="mb-3">
                             <label for="userRole" class="form-label">Роль</label>
                             <select class="form-select" id="userRole" required>
-                                <option value="client">Клиент</option>
-                                <option value="admin">Администратор</option>
+                                <option value="">Выберите роль</option>
                             </select>
                         </div>
                     </form>
@@ -698,6 +739,159 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
                     <button type="button" class="btn btn-primary" id="saveUserBtn">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно роли -->
+    <div class="modal fade" id="roleModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="roleModalTitle">Добавить роль</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="roleForm">
+                        <input type="hidden" id="roleId">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="roleName" class="form-label">Название</label>
+                                <input type="text" class="form-control" id="roleName" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="roleDescription" class="form-label">Описание</label>
+                                <input type="text" class="form-control" id="roleDescription">
+                            </div>
+                        </div>
+
+                        <hr>
+                        <h5 class="mb-3">Права доступа</h5>
+
+                        <div class="row">
+                            <!-- Права на материалы -->
+                            <div class="col-md-4">
+                                <h6>Материалы</h6>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canViewMaterials">
+                                    <label class="form-check-label" for="canViewMaterials">Просмотр</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canDownloadMaterials">
+                                    <label class="form-check-label" for="canDownloadMaterials">Скачивание</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canCreateMaterials">
+                                    <label class="form-check-label" for="canCreateMaterials">Создание</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canEditMaterials">
+                                    <label class="form-check-label" for="canEditMaterials">Редактирование</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canDeleteMaterials">
+                                    <label class="form-check-label" for="canDeleteMaterials">Удаление</label>
+                                </div>
+                            </div>
+
+                            <!-- Права на категории -->
+                            <div class="col-md-4">
+                                <h6>Категории</h6>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canCreateCategories">
+                                    <label class="form-check-label" for="canCreateCategories">Создание</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canEditCategories">
+                                    <label class="form-check-label" for="canEditCategories">Редактирование</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canDeleteCategories">
+                                    <label class="form-check-label" for="canDeleteCategories">Удаление</label>
+                                </div>
+                            </div>
+
+                            <!-- Права на пользователей -->
+                            <div class="col-md-4">
+                                <h6>Пользователи</h6>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canViewUsers">
+                                    <label class="form-check-label" for="canViewUsers">Просмотр</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canCreateUsers">
+                                    <label class="form-check-label" for="canCreateUsers">Создание</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canEditUsers">
+                                    <label class="form-check-label" for="canEditUsers">Редактирование</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canDeleteUsers">
+                                    <label class="form-check-label" for="canDeleteUsers">Удаление</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Дополнительные права -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <h6>Роли</h6>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canManageRoles">
+                                    <label class="form-check-label" for="canManageRoles">Управление ролями</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <h6>Логи</h6>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canViewLogs">
+                                    <label class="form-check-label" for="canViewLogs">Просмотр логов</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <h6>Администратор</h6>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="isAdmin">
+                                    <label class="form-check-label" for="isAdmin">Полные права</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Доступ к категориям -->
+                        <h5 class="mb-3">Доступ к категориям</h5>
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="canManageAllCategories">
+                                <label class="form-check-label" for="canManageAllCategories">
+                                    <strong>Полный доступ ко всем категориям</strong>
+                                </label>
+                            </div>
+                            <small class="text-muted">
+                                Если отключено, выберите конкретные категории ниже. Доступ к категории автоматически
+                                предоставляет доступ ко всем вложенным подкатегориям.
+                            </small>
+                        </div>
+
+                        <div id="categoryAccessSection" class="mb-3">
+                            <label class="form-label">Выберите категории для доступа:</label>
+                            <div id="roleCategoryTree" class="border rounded p-3"
+                                style="max-height: 300px; overflow-y: auto;">
+                                <!-- Дерево категорий будет загружено через jsTree -->
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" id="saveRoleBtn">Сохранить</button>
                 </div>
             </div>
         </div>
@@ -785,6 +979,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Dropzone -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/dropzone.min.js"></script>
+    <!-- jsTree -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
 
     <!-- Дополнительное отключение автообнаружения -->
     <script>
@@ -794,6 +990,7 @@
         }
     </script>
 
+    <script src="js/permissions.js"></script>
     <script src="js/admin.js"></script>
 </body>
 

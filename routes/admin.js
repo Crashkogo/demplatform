@@ -14,18 +14,22 @@ const userValidation = [
     body('password')
         .isLength({ min: 6 })
         .withMessage('Пароль должен содержать минимум 6 символов'),
-    body('role')
-        .isIn(['admin', 'client'])
-        .withMessage('Роль должна быть admin или client')
+    body('roleId')
+        .isInt({ min: 1 })
+        .withMessage('Необходимо указать корректную роль')
 ];
 
 // GET /api/admin/stats - Получение статистики
 router.get('/stats', [authenticateToken, requireAdmin], async (req, res) => {
     try {
         // Статистика пользователей
+        const { Role } = require('../models');
         const totalUsers = await User.count();
-        const adminUsers = await User.count({ where: { role: 'admin' } });
-        const clientUsers = await User.count({ where: { role: 'client' } });
+
+        // Подсчитываем администраторов через роли
+        const adminRole = await Role.findOne({ where: { isAdmin: true } });
+        const adminUsers = adminRole ? await User.count({ where: { roleId: adminRole.id } }) : 0;
+        const clientUsers = totalUsers - adminUsers;
 
         // Статистика категорий
         const totalCategories = await Category.count({ where: { isActive: true } });
@@ -124,9 +128,15 @@ router.get('/users', [authenticateToken, requireAdmin], async (req, res) => {
             };
         }
 
+        const { Role } = require('../models');
         const { rows: users, count: total } = await User.findAndCountAll({
             where: whereClause,
             attributes: { exclude: ['password'] },
+            include: [{
+                model: Role,
+                as: 'roleData',
+                attributes: ['id', 'name', 'isAdmin']
+            }],
             order: [['createdAt', 'DESC']],
             limit: parseInt(limit),
             offset: (parseInt(page) - 1) * parseInt(limit)
@@ -163,7 +173,14 @@ router.post('/users', [authenticateToken, requireAdmin, ...userValidation], asyn
             });
         }
 
-        const { login, password, role } = req.body;
+        const { login, password, roleId } = req.body;
+
+        if (!roleId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Необходимо указать роль'
+            });
+        }
 
         // Проверяем, существует ли пользователь с таким логином
         const existingUser = await User.findOne({ where: { login } });
@@ -177,7 +194,7 @@ router.post('/users', [authenticateToken, requireAdmin, ...userValidation], asyn
         const user = new User({
             login,
             password,
-            role
+            roleId
         });
 
         await user.save();
@@ -200,7 +217,7 @@ router.post('/users', [authenticateToken, requireAdmin, ...userValidation], asyn
 router.put('/users/:id', [authenticateToken, requireAdmin], async (req, res) => {
     try {
         const { id } = req.params;
-        const { login, role, password } = req.body;
+        const { login, roleId, password } = req.body;
 
         const user = await User.findByPk(id);
         if (!user) {
@@ -222,8 +239,9 @@ router.put('/users/:id', [authenticateToken, requireAdmin], async (req, res) => 
             user.login = login;
         }
 
-        if (role && ['admin', 'client'].includes(role)) {
-            user.role = role;
+        // Обновляем роль
+        if (roleId !== undefined) {
+            user.roleId = roleId;
         }
 
         if (password && password.length >= 6) {

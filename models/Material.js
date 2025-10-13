@@ -33,7 +33,8 @@ class Material extends Model {
             categoryId,
             fileType,
             limit = 50,
-            offset = 0
+            offset = 0,
+            accessibleCategoryIds // Новый параметр для фильтрации по доступным категориям
         } = options;
 
         const whereClause = {
@@ -42,6 +43,13 @@ class Material extends Model {
 
         if (categoryId) {
             whereClause.categoryId = categoryId;
+        }
+
+        // Фильтрация по доступным категориям
+        if (accessibleCategoryIds && Array.isArray(accessibleCategoryIds) && accessibleCategoryIds.length > 0) {
+            whereClause.categoryId = {
+                [sequelize.Sequelize.Op.in]: accessibleCategoryIds
+            };
         }
 
         if (fileType) {

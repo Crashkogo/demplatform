@@ -96,10 +96,7 @@ Category.init({
         type: DataTypes.BOOLEAN,
         defaultValue: true
     },
-    accessRoles: {
-        type: DataTypes.JSON,
-        defaultValue: ['client']
-    }
+    
 }, {
     sequelize,
     modelName: 'Category',

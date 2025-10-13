@@ -52,22 +52,47 @@ const authenticateToken = async (req, res, next) => {
 };
 
 // Middleware для проверки роли администратора
-const requireAdmin = (req, res, next) => {
-    if (!req.user) {
-        return res.status(401).json({
+const requireAdmin = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Требуется аутентификация'
+            });
+        }
+
+        if (!req.user.roleId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Роль не назначена'
+            });
+        }
+
+        const { Role } = require('../models');
+        const role = await Role.findByPk(req.user.roleId);
+
+        if (!role) {
+            return res.status(403).json({
+                success: false,
+                message: 'Роль не найдена'
+            });
+        }
+
+        if (!role.isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Требуются права администратора'
+            });
+        }
+
+        next();
+    } catch (error) {
+        console.error('requireAdmin middleware error:', error);
+        return res.status(500).json({
             success: false,
-            message: 'Требуется аутентификация'
+            message: 'Ошибка проверки прав доступа'
         });
     }
-
-    if (req.user.role !== 'admin') {
-        return res.status(403).json({
-            success: false,
-            message: 'Требуются права администратора'
-        });
-    }
-
-    next();
 };
 
 // Функция для генерации JWT токена

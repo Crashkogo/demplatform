@@ -80,10 +80,16 @@ function checkAuth() {
 
         // Обновляем информацию о пользователе в интерфейсе
         document.getElementById('userInfo').textContent = currentUser.login;
-        document.getElementById('userRole').textContent = `Роль: ${currentUser.role === 'admin' ? 'Администратор' : 'Клиент'}`;
+        // Отображаем название роли из данных пользователя
+        const roleName = currentUser.roleName || 'Не указана';
+        document.getElementById('userRole').textContent = `Роль: ${roleName}`;
 
-        // Показываем кнопки админ-панели только для администраторов
-        if (currentUser.role === 'admin') {
+        // Показываем кнопки админ-панели если есть права для доступа к админке
+        if (PermissionsManager.isAdmin() ||
+            PermissionsManager.canViewSection('users') ||
+            PermissionsManager.canViewSection('roles') ||
+            PermissionsManager.canViewSection('categories') ||
+            PermissionsManager.canViewSection('materials')) {
             const adminPanelBtn = document.getElementById('adminPanelBtn');
             const adminMenuLink = document.getElementById('adminMenuLink');
             const adminMenuDivider = document.getElementById('adminMenuDivider');
@@ -208,6 +214,13 @@ async function loadCategories() {
         if (response.data.success) {
             console.log('Загружено категорий:', response.data.data.length);
             console.log('Данные категорий:', response.data.data);
+
+            // Проверяем, есть ли доступные категории
+            if (response.data.data.length === 0) {
+                showError('У вас нет доступа ни к одной категории. Обратитесь к администратору.');
+                return;
+            }
+
             initializeCategoryTree(response.data.data);
         } else {
             console.error('Ошибка загрузки категорий от сервера:', response.data.message);
@@ -912,6 +925,7 @@ function showError(message) {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    PermissionsManager.clear(); // Очищаем права
     window.location.href = '/';
 }
 

@@ -3,7 +3,8 @@ const { body, validationResult } = require('express-validator');
 const path = require('path');
 const fs = require('fs');
 const { Material, Category } = require('../models');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
+const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
 const { handleUpload, deleteFile } = require('../middleware/upload');
 
 const router = express.Router();
@@ -57,8 +58,8 @@ function determineFileType(mimeType) {
     }
 }
 
-// GET /api/materials - Поиск материалов
-router.get('/', authenticateToken, async (req, res) => {
+// GET /api/materials - Поиск материалов с учетом прав доступа
+router.get('/', [authenticateToken, addAccessibleCategories], async (req, res) => {
     try {
         const {
             search,
@@ -74,6 +75,11 @@ router.get('/', authenticateToken, async (req, res) => {
             limit: parseInt(limit),
             offset: (parseInt(page) - 1) * parseInt(limit)
         };
+
+        // Если пользователь не имеет доступа ко всем категориям, фильтруем по доступным
+        if (req.accessibleCategories !== 'all') {
+            options.accessibleCategoryIds = req.accessibleCategories;
+        }
 
         const result = await Material.search(search, options);
 
@@ -97,7 +103,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // GET /api/materials/:id - Получение конкретного материала
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', [authenticateToken, addAccessibleCategories], async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -123,7 +129,15 @@ router.get('/:id', authenticateToken, async (req, res) => {
             });
         }
 
-        // Убираем проверку доступа - все материалы доступны всем
+        // Проверяем доступ к категории материала
+        if (req.accessibleCategories !== 'all') {
+            if (!req.accessibleCategories.includes(material.categoryId)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Доступ к материалу запрещен'
+                });
+            }
+        }
 
         res.json({
             success: true,
@@ -139,7 +153,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // GET /api/materials/:id/view - Просмотр файла материала
-router.get('/:id/view', authenticateToken, async (req, res) => {
+router.get('/:id/view', [authenticateToken, checkAccess('canViewMaterials'), addAccessibleCategories], async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -151,7 +165,15 @@ router.get('/:id/view', authenticateToken, async (req, res) => {
             });
         }
 
-        // Убираем проверку доступа - все материалы доступны всем
+        // Проверяем доступ к категории материала
+        if (req.accessibleCategories !== 'all') {
+            if (!req.accessibleCategories.includes(material.categoryId)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Доступ к просмотру материала запрещен'
+                });
+            }
+        }
 
         const filePath = path.resolve(material.filePath);
 
@@ -206,7 +228,7 @@ router.get('/:id/view', authenticateToken, async (req, res) => {
 });
 
 // GET /api/materials/:id/download - Скачивание файла материала
-router.get('/:id/download', authenticateToken, async (req, res) => {
+router.get('/:id/download', [authenticateToken, checkAccess('canDownloadMaterials'), addAccessibleCategories], async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -218,7 +240,15 @@ router.get('/:id/download', authenticateToken, async (req, res) => {
             });
         }
 
-        // Убираем проверку доступа - все материалы доступны всем
+        // Проверяем доступ к категории материала
+        if (req.accessibleCategories !== 'all') {
+            if (!req.accessibleCategories.includes(material.categoryId)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Доступ к скачиванию материала запрещен'
+                });
+            }
+        }
 
         const filePath = path.resolve(material.filePath);
 
@@ -273,8 +303,8 @@ router.get('/:id/download', authenticateToken, async (req, res) => {
     }
 });
 
-// POST /api/materials - Создание нового материала (только админ)
-router.post('/', [authenticateToken, requireAdmin, handleUpload], async (req, res) => {
+// POST /api/materials - Создание нового материала
+router.post('/', [authenticateToken, checkAccess('canCreateMaterials'), handleUpload], async (req, res) => {
     try {
         // Валидация после загрузки файла
         await Promise.all(materialValidation.map(validation => validation.run(req)));
@@ -392,8 +422,8 @@ router.post('/', [authenticateToken, requireAdmin, handleUpload], async (req, re
     }
 });
 
-// PUT /api/materials/:id - Обновление материала (только админ)
-router.put('/:id', [authenticateToken, requireAdmin], async (req, res) => {
+// PUT /api/materials/:id - Обновление материала
+router.put('/:id', [authenticateToken, checkAccess('canEditMaterials')], async (req, res) => {
     try {
         const { id } = req.params;
         const { title, description, categoryId } = req.body;
@@ -461,8 +491,8 @@ router.put('/:id', [authenticateToken, requireAdmin], async (req, res) => {
     }
 });
 
-// DELETE /api/materials/:id - Удаление материала (только админ)
-router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
+// DELETE /api/materials/:id - Удаление материала
+router.delete('/:id', [authenticateToken, checkAccess('canDeleteMaterials')], async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -493,4 +523,4 @@ router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
     }
 });
 
-module.exports = router; 
+module.exports = router;

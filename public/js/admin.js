@@ -5,6 +5,7 @@ let dropzone = null;
 let allCategories = [];
 let allUsers = [];
 let allMaterials = [];
+let allRoles = []; // Добавлено
 
 // Настройка Axios
 axios.defaults.baseURL = window.location.origin;
@@ -70,12 +71,15 @@ async function initializeApp() {
             return;
         }
 
-        // Проверяем права администратора
-        if (currentUser.role !== 'admin') {
-            alert('Доступ запрещен. Требуются права администратора.');
+        // Проверяем доступ к админке (любое административное право)
+        if (!canAccessAdmin()) {
+            alert('Доступ запрещен. У вас нет прав для доступа к админ-панели.');
             window.location.href = '/app';
             return;
         }
+
+        // Скрываем разделы, к которым нет доступа
+        setupMenuVisibility();
 
         // Инициализируем компоненты
         initializeEventListeners();
@@ -87,6 +91,39 @@ async function initializeApp() {
         console.error('Ошибка инициализации:', error);
         showError('Ошибка загрузки админ-панели');
     }
+}
+
+// Проверка доступа к админ-панели
+function canAccessAdmin() {
+    return PermissionsManager.isAdmin() ||
+        PermissionsManager.canViewSection('users') ||
+        PermissionsManager.canViewSection('roles') ||
+        PermissionsManager.canViewSection('categories') ||
+        PermissionsManager.canViewSection('materials');
+}
+
+// Настройка видимости меню на основе прав
+function setupMenuVisibility() {
+    // Скрываем кнопки разделов, к которым нет доступа
+    const menuItems = [
+        { id: 'dashboardBtn', section: 'dashboard', always: true }, // Dashboard всегда доступен
+        { id: 'usersBtn', section: 'users' },
+        { id: 'rolesBtn', section: 'roles' },
+        { id: 'categoriesBtn', section: 'categories' },
+        { id: 'materialsBtn', section: 'materials' },
+        { id: 'uploadBtn', section: 'upload' }
+    ];
+
+    menuItems.forEach(item => {
+        const btn = document.getElementById(item.id);
+        if (btn) {
+            if (item.always || PermissionsManager.canViewSection(item.section)) {
+                btn.style.display = '';
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+    });
 }
 
 // Проверка авторизации
@@ -155,8 +192,47 @@ function initializeEventListeners() {
 function initializeModalHandlers() {
     // Пользователи
     document.getElementById('saveUserBtn').addEventListener('click', saveUser);
+    document.getElementById('userModal').addEventListener('show.bs.modal', async function () {
+        await populateUserRoleSelect();
+    });
     document.getElementById('userModal').addEventListener('hidden.bs.modal', function () {
         resetUserForm();
+    });
+
+    // Роли
+    document.getElementById('saveRoleBtn').addEventListener('click', saveRole);
+    document.getElementById('roleModal').addEventListener('show.bs.modal', async (event) => {
+        const button = event.relatedTarget;
+        if (button) {
+            const roleId = button.getAttribute('data-role-id');
+            if (roleId) {
+                await populateRoleForm(roleId);
+            } else {
+                resetRoleForm();
+                await setupRoleCategoryTree();
+                document.getElementById('roleModalTitle').textContent = 'Добавить роль';
+            }
+        }
+    });
+    document.getElementById('roleModal').addEventListener('hidden.bs.modal', function () {
+        resetRoleForm();
+    });
+
+    // Обработчик для переключения доступа к категориям
+    document.getElementById('canManageAllCategories').addEventListener('change', function () {
+        const categorySection = document.getElementById('categoryAccessSection');
+        categorySection.style.display = this.checked ? 'none' : 'block';
+    });
+
+    // Обработчик для isAdmin - включает все права
+    document.getElementById('isAdmin').addEventListener('change', function () {
+        if (this.checked) {
+            document.querySelectorAll('#roleForm .form-check-input').forEach(checkbox => {
+                if (checkbox.id !== 'isAdmin') {
+                    checkbox.checked = true;
+                }
+            });
+        }
     });
 
     // Категории
@@ -176,6 +252,12 @@ function initializeModalHandlers() {
 async function showSection(sectionName) {
     try {
         console.log('Переходим к разделу:', sectionName);
+
+        // Проверяем права доступа к разделу (кроме dashboard)
+        if (sectionName !== 'dashboard' && !PermissionsManager.canViewSection(sectionName)) {
+            showError('У вас нет прав для доступа к этому разделу');
+            return;
+        }
 
         // Если уходим с раздела upload, очищаем Dropzone
         const currentActiveSection = document.querySelector('.content-section.active');
@@ -212,6 +294,9 @@ async function showSection(sectionName) {
                 break;
             case 'users':
                 await loadUsers();
+                break;
+            case 'roles':
+                await loadRoles();
                 break;
             case 'categories':
                 await loadCategories();
@@ -300,11 +385,25 @@ async function loadDashboard() {
 // Загрузка пользователей
 async function loadUsers() {
     try {
+        // Загружаем роли, если еще не загружены (нужны для отображения)
+        if (allRoles.length === 0) {
+            const rolesResponse = await axios.get('/api/roles');
+            if (rolesResponse.data.success) {
+                allRoles = rolesResponse.data.data;
+            }
+        }
+
         const response = await axios.get('/api/admin/users');
 
         if (response.data.success) {
             allUsers = response.data.data;
             renderUsers(allUsers);
+
+            // Управляем видимостью кнопки "Добавить пользователя"
+            const addUserBtn = document.querySelector('[onclick="addUser()"]');
+            if (addUserBtn) {
+                addUserBtn.style.display = PermissionsManager.has('canCreateUsers') ? '' : 'none';
+            }
         }
     } catch (error) {
         console.error('Ошибка загрузки пользователей:', error);
@@ -327,23 +426,48 @@ function renderUsers(users) {
         const createdDate = new Date(user.createdAt).toLocaleDateString('ru-RU');
         const lastLogin = user.lastLogin ? new Date(user.lastLogin).toLocaleDateString('ru-RU') : 'Никогда';
 
+        // Определяем название роли и цвет бейджа
+        let roleName = 'Не назначена';
+        let badgeClass = 'bg-secondary';
+
+        if (user.roleId && allRoles.length > 0) {
+            const role = allRoles.find(r => r.id === user.roleId);
+            if (role) {
+                roleName = role.name;
+                badgeClass = role.isAdmin ? 'bg-danger' : 'bg-success';
+            }
+        }
+
+        // Формируем кнопки управления с учетом прав
+        let actionsHTML = '';
+        if (PermissionsManager.has('canEditUsers')) {
+            actionsHTML += `
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="editUser(${user.id})">
+                    <i class="bi bi-pencil"></i>
+                </button>
+            `;
+        }
+        if (PermissionsManager.has('canDeleteUsers')) {
+            actionsHTML += `
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+        }
+        if (!actionsHTML) {
+            actionsHTML = '<span class="text-muted">—</span>';
+        }
+
         row.innerHTML = `
             <td>${user.login}</td>
             <td>
-                <span class="badge ${user.role === 'admin' ? 'bg-danger' : 'bg-primary'}">
-                    ${user.role === 'admin' ? 'Администратор' : 'Клиент'}
+                <span class="badge ${badgeClass}">
+                    ${roleName}
                 </span>
             </td>
             <td>${createdDate}</td>
             <td>${lastLogin}</td>
-            <td>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="editUser(${user.id})">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </td>
+            <td>${actionsHTML}</td>
         `;
         tbody.appendChild(row);
     });
@@ -364,7 +488,7 @@ function searchUsers(query) {
 }
 
 // Редактирование пользователя
-function editUser(userId) {
+async function editUser(userId) {
     const user = allUsers.find(u => u.id === userId);
     if (!user) return;
 
@@ -372,7 +496,10 @@ function editUser(userId) {
     document.getElementById('userLogin').value = user.login;
     document.getElementById('userPassword').value = '';
     document.getElementById('userPassword').required = false;
-    document.getElementById('userRole').value = user.role;
+
+    // Устанавливаем значение после загрузки списка ролей
+    await populateUserRoleSelect();
+    document.getElementById('userRole').value = user.roleId;
 
     document.getElementById('userModalTitle').textContent = 'Редактировать пользователя';
 
@@ -410,14 +537,18 @@ async function saveUser() {
         const userId = document.getElementById('userId').value;
         const login = document.getElementById('userLogin').value.trim();
         const password = document.getElementById('userPassword').value;
-        const role = document.getElementById('userRole').value;
+        const roleValue = document.getElementById('userRole').value;
 
-        if (!login || (!password && !userId)) {
+        if (!login || (!password && !userId) || !roleValue) {
             showError('Заполните все обязательные поля');
             return;
         }
 
-        const userData = { login, role };
+        const userData = {
+            login,
+            roleId: parseInt(roleValue)
+        };
+
         if (password) {
             userData.password = password;
         }
@@ -445,6 +576,33 @@ async function saveUser() {
     }
 }
 
+// Заполнение выпадающего списка ролей для пользователя
+async function populateUserRoleSelect() {
+    try {
+        // Загружаем роли, если еще не загружены
+        if (allRoles.length === 0) {
+            const response = await axios.get('/api/roles');
+            if (response.data.success) {
+                allRoles = response.data.data;
+            }
+        }
+
+        const roleSelect = document.getElementById('userRole');
+        roleSelect.innerHTML = '<option value="">Выберите роль</option>';
+
+        // Добавляем роли из базы данных
+        allRoles.forEach(role => {
+            const option = document.createElement('option');
+            option.value = role.id;
+            option.textContent = role.name + (role.isAdmin ? ' (Администратор)' : '');
+            roleSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки ролей:', error);
+        showError('Не удалось загрузить список ролей');
+    }
+}
+
 // Сброс формы пользователя
 function resetUserForm() {
     document.getElementById('userForm').reset();
@@ -452,6 +610,239 @@ function resetUserForm() {
     document.getElementById('userPassword').required = true;
     document.getElementById('userModalTitle').textContent = 'Добавить пользователя';
 }
+
+// Загрузка ролей
+async function loadRoles() {
+    try {
+        const response = await axios.get('/api/roles');
+        if (response.data.success) {
+            allRoles = response.data.data;
+            renderRoles(allRoles);
+
+            // Управляем видимостью кнопки "Добавить роль"
+            const addRoleBtn = document.querySelector('[onclick="addRole()"]');
+            if (addRoleBtn) {
+                addRoleBtn.style.display = PermissionsManager.has('canManageRoles') ? '' : 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки ролей:', error);
+        showError('Ошибка загрузки ролей');
+    }
+}
+
+// Отображение ролей
+function renderRoles(roles) {
+    const tbody = document.getElementById('rolesTableBody');
+    tbody.innerHTML = '';
+
+    if (roles.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Роли не найдены</td></tr>';
+        return;
+    }
+
+    roles.forEach(role => {
+        const row = document.createElement('tr');
+
+        // Формируем кнопки управления с учетом прав
+        let actionsHTML = '';
+        if (PermissionsManager.has('canManageRoles')) {
+            actionsHTML = `
+                <button class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#roleModal" data-role-id="${role.id}">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteRole(${role.id})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+        } else {
+            actionsHTML = '<span class="text-muted">—</span>';
+        }
+
+        row.innerHTML = `
+            <td>${role.name}</td>
+            <td>${role.description || '-'}</td>
+            <td>
+                <span class="badge ${role.isAdmin ? 'bg-danger' : 'bg-secondary'}">
+                    ${role.isAdmin ? 'Да' : 'Нет'}
+                </span>
+            </td>
+            <td>${actionsHTML}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Заполнение формы роли
+async function populateRoleForm(roleId) {
+    try {
+        const response = await axios.get(`/api/roles/${roleId}`);
+        if (!response.data.success) {
+            showError('Не удалось загрузить данные роли');
+            return;
+        }
+        const role = response.data.data;
+
+        document.getElementById('roleId').value = role.id;
+        document.getElementById('roleName').value = role.name;
+        document.getElementById('roleDescription').value = role.description || '';
+
+        // Устанавливаем чекбоксы прав
+        for (const permission in role) {
+            const checkbox = document.getElementById(permission);
+            if (checkbox && typeof role[permission] === 'boolean') {
+                checkbox.checked = role[permission];
+            }
+        }
+
+        // Управляем видимостью секции выбора категорий
+        const categoryAccessSection = document.getElementById('categoryAccessSection');
+        if (role.canManageAllCategories || role.isAdmin) {
+            categoryAccessSection.style.display = 'none';
+        } else {
+            categoryAccessSection.style.display = 'block';
+        }
+
+        // Инициализируем и настраиваем дерево категорий
+        const allowedCategoryIds = role.allowedCategories ? role.allowedCategories.map(c => c.id) : [];
+        await setupRoleCategoryTree(allowedCategoryIds);
+
+        document.getElementById('roleModalTitle').textContent = 'Редактировать роль';
+    } catch (error) {
+        console.error('Ошибка загрузки роли:', error);
+        showError('Ошибка загрузки данных роли');
+        // Закрываем модальное окно в случае ошибки
+        const modal = bootstrap.Modal.getInstance(document.getElementById('roleModal'));
+        if (modal) {
+            modal.hide();
+        }
+    }
+}
+
+// Удаление роли
+async function deleteRole(roleId) {
+    const role = allRoles.find(r => r.id === roleId);
+    if (!role) return;
+
+    if (!confirm(`Вы уверены, что хотите удалить роль "${role.name}"?`)) {
+        return;
+    }
+
+    try {
+        const response = await axios.delete(`/api/roles/${roleId}`);
+        if (response.data.success) {
+            showSuccess(response.data.message);
+            await loadRoles();
+        } else {
+            showError(response.data.message);
+        }
+    } catch (error) {
+        console.error('Ошибка удаления роли:', error);
+        showError(error.response?.data?.message || 'Ошибка удаления роли');
+    }
+}
+
+// Сохранение роли
+async function saveRole() {
+    try {
+        const roleId = document.getElementById('roleId').value;
+        const name = document.getElementById('roleName').value.trim();
+        const description = document.getElementById('roleDescription').value.trim();
+
+        if (!name) {
+            showError('Введите название роли');
+            return;
+        }
+
+        const permissions = {};
+        document.querySelectorAll('#roleForm .form-check-input').forEach(checkbox => {
+            permissions[checkbox.id] = checkbox.checked;
+        });
+
+        // Получаем выбранные категории только если не установлен полный доступ
+        let allowedCategories = [];
+        if (!permissions.canManageAllCategories && !permissions.isAdmin) {
+            const treeInstance = $('#roleCategoryTree').jstree(true);
+            if (treeInstance) {
+                allowedCategories = treeInstance.get_selected();
+            }
+        }
+
+        const roleData = {
+            name,
+            description,
+            ...permissions,
+            allowedCategories
+        };
+
+        let response;
+        if (roleId) {
+            response = await axios.put(`/api/roles/${roleId}`, roleData);
+        } else {
+            response = await axios.post('/api/roles', roleData);
+        }
+
+        if (response.data.success) {
+            showSuccess(response.data.message);
+            bootstrap.Modal.getInstance(document.getElementById('roleModal')).hide();
+            await loadRoles();
+        } else {
+            showError(response.data.message);
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения роли:', error);
+        showError(error.response?.data?.message || 'Ошибка сохранения роли');
+    }
+}
+
+// Сброс формы роли
+function resetRoleForm() {
+    document.getElementById('roleForm').reset();
+    document.getElementById('roleId').value = '';
+    document.getElementById('roleModalTitle').textContent = 'Добавить роль';
+
+    // Показываем секцию выбора категорий по умолчанию
+    document.getElementById('categoryAccessSection').style.display = 'block';
+
+    // Сбрасываем дерево категорий
+    if ($('#roleCategoryTree').jstree(true)) {
+        $('#roleCategoryTree').jstree(true).destroy();
+    }
+}
+
+// Настройка дерева категорий для роли
+async function setupRoleCategoryTree(selectedCategoryIds = []) {
+    if (allCategories.length === 0) {
+        await loadCategories();
+    }
+
+    const treeData = allCategories.map(cat => ({
+        id: cat.id.toString(),
+        parent: cat.parentId ? cat.parentId.toString() : '#',
+        text: cat.name,
+        state: {
+            selected: selectedCategoryIds.includes(cat.id)
+        }
+    }));
+
+    const treeElement = $('#roleCategoryTree');
+    if (treeElement.jstree(true)) {
+        treeElement.jstree(true).destroy();
+    }
+
+    treeElement.jstree({
+        core: {
+            data: treeData
+        },
+        plugins: ["checkbox"],
+        checkbox: {
+            keep_selected_style: false,
+            three_state: false,  // Отключаем автоматический выбор родителей
+            cascade: 'down'      // Каскад только вниз к дочерним элементам
+        }
+    });
+}
+
 
 // Загрузка категорий
 async function loadCategories() {
@@ -462,6 +853,12 @@ async function loadCategories() {
             allCategories = response.data.data;
             renderCategories(allCategories);
             updateCategorySelects();
+
+            // Управляем видимостью кнопки "Добавить категорию"
+            const addCategoryBtn = document.querySelector('[onclick="addCategory()"]');
+            if (addCategoryBtn) {
+                addCategoryBtn.style.display = PermissionsManager.has('canCreateCategories') ? '' : 'none';
+            }
         }
     } catch (error) {
         console.error('Ошибка загрузки категорий:', error);
@@ -483,6 +880,31 @@ function renderCategories(categories) {
         const row = document.createElement('tr');
         const parentName = categories.find(c => c.id === category.parentId)?.name || '-';
 
+        // Проверяем доступ к категории
+        const hasAccess = PermissionsManager.hasCategoryAccess(category.id);
+
+        // Формируем кнопки управления с учетом прав и доступа
+        let actionsHTML = '';
+        if (hasAccess) {
+            if (PermissionsManager.has('canEditCategories')) {
+                actionsHTML += `
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editCategory(${category.id})">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                `;
+            }
+            if (PermissionsManager.has('canDeleteCategories')) {
+                actionsHTML += `
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory(${category.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                `;
+            }
+        }
+        if (!actionsHTML) {
+            actionsHTML = '<span class="text-muted">—</span>';
+        }
+
         row.innerHTML = `
             <td>${'  '.repeat(category.level)}${category.name}</td>
             <td>${parentName}</td>
@@ -493,14 +915,7 @@ function renderCategories(categories) {
                     ${category.isActive ? 'Активна' : 'Неактивна'}
                 </span>
             </td>
-            <td>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="editCategory(${category.id})">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory(${category.id})">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </td>
+            <td>${actionsHTML}</td>
         `;
         tbody.appendChild(row);
     });
@@ -626,11 +1041,11 @@ function updateCategorySelects() {
         allCategories.forEach(category => {
             const option = document.createElement('option');
             option.value = category.id;
-            
+
             // Используем функцию для получения пути
             const categoryPath = getCategoryPath(category, allCategories);
             option.textContent = categoryPath;
-            
+
             select.appendChild(option);
         });
 
@@ -669,6 +1084,37 @@ function renderMaterials(materials) {
         const fileSize = formatFileSize(material.fileSize);
         const typeIcon = getFileTypeIcon(material.fileType);
 
+        // Получаем ID категории материала
+        const materialCategoryId = material.categoryId?.id || material.categoryId;
+        const hasAccess = PermissionsManager.hasCategoryAccess(materialCategoryId);
+
+        // Формируем кнопки управления с учетом прав и доступа
+        let actionsHTML = '';
+        if (PermissionsManager.has('canViewMaterials')) {
+            actionsHTML += `
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="viewMaterial(${material.id})">
+                    <i class="bi bi-eye"></i>
+                </button>
+            `;
+        }
+        if (hasAccess && PermissionsManager.has('canEditMaterials')) {
+            actionsHTML += `
+                <button class="btn btn-sm btn-outline-secondary me-1" onclick="editMaterial(${material.id})">
+                    <i class="bi bi-pencil"></i>
+                </button>
+            `;
+        }
+        if (hasAccess && PermissionsManager.has('canDeleteMaterials')) {
+            actionsHTML += `
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteMaterial(${material.id})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+        }
+        if (!actionsHTML) {
+            actionsHTML = '<span class="text-muted">—</span>';
+        }
+
         row.innerHTML = `
             <td>
                 <div class="d-flex align-items-center">
@@ -685,17 +1131,7 @@ function renderMaterials(materials) {
             <td>${fileSize}</td>
             <td><span class="badge bg-info">${material.viewCount || 0}</span></td>
             <td><span class="badge bg-success">${material.downloadCount || 0}</span></td>
-            <td>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="viewMaterial(${material.id})">
-                    <i class="bi bi-eye"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-secondary me-1" onclick="editMaterial(${material.id})">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteMaterial(${material.id})">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </td>
+            <td>${actionsHTML}</td>
         `;
         tbody.appendChild(row);
     });
@@ -1114,6 +1550,7 @@ function showError(message) {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    PermissionsManager.clear(); // Очищаем права
     window.location.href = '/';
 }
 
@@ -1241,33 +1678,33 @@ function getCategoryPath(category, allCategories) {
     // Создаем Map для быстрого доступа к категориям по ID
     const categoryMap = new Map();
     allCategories.forEach(cat => categoryMap.set(cat.id, cat));
-    
+
     const path = [];
     let current = category;
-    
+
     // Защита от бесконечного цикла (на случай циклических ссылок)
     const maxDepth = 10;
     let depth = 0;
-    
+
     // Идем вверх по иерархии
     while (current && depth < maxDepth) {
         path.unshift(current.name); // Добавляем в начало массива
-        
+
         if (current.parentId) {
             // Быстрый поиск через Map
             current = categoryMap.get(current.parentId);
         } else {
             current = null;
         }
-        
+
         depth++;
     }
-    
+
     // Если корневая категория - добавляем "*/"
     if (path.length === 1) {
         return `*/${path[0]}`;
     }
-    
+
     // Иначе возвращаем полный путь через "/"
     return path.join('/');
 }
@@ -1278,4 +1715,6 @@ window.editCategory = editCategory;
 window.deleteCategory = deleteCategory;
 window.editMaterial = editMaterial;
 window.deleteMaterial = deleteMaterial;
-window.viewMaterial = viewMaterial; 
+window.viewMaterial = viewMaterial;
+
+

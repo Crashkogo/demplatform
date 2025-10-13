@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { User } = require('../models');
+const { User, Role } = require('../models');
 const { generateToken, authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -31,8 +31,19 @@ router.post('/login', loginValidation, async (req, res) => {
 
         const { login, password } = req.body;
 
-        // Поиск пользователя
-        const user = await User.findOne({ where: { login } });
+        // Поиск пользователя с ролью
+        console.log('🔍 Ищем пользователя:', login);
+        const user = await User.findOne({
+            where: { login },
+            include: [{ model: Role, as: 'roleData' }]
+        });
+
+        console.log('🔍 Пользователь найден:', !!user);
+        if (user) {
+            console.log('🔍 roleData присутствует:', !!user.roleData);
+            console.log('🔍 roleId:', user.roleId);
+        }
+
         if (!user) {
             return res.status(401).json({
                 success: false,
@@ -49,6 +60,17 @@ router.post('/login', loginValidation, async (req, res) => {
             });
         }
 
+        // Проверка наличия роли
+        if (!user.roleData) {
+            console.error('❌ Роль не загружена для пользователя:', user.login);
+            return res.status(403).json({
+                success: false,
+                message: 'Роль пользователя не найдена. Обратитесь к администратору.'
+            });
+        }
+
+        console.log('✅ Роль загружена:', user.roleData.name);
+
         // Обновление времени последнего входа
         user.lastLogin = new Date();
         await user.save();
@@ -56,12 +78,34 @@ router.post('/login', loginValidation, async (req, res) => {
         // Генерация токена
         const token = generateToken(user.id);
 
-        res.json({
+        // Получаем права пользователя
+        const permissions = user.roleData.getPermissions();
+        console.log('✅ Права получены:', Object.keys(permissions).length);
+
+        // Получаем доступные категории (только ID для оптимизации)
+        const accessibleCategories = await user.getAccessibleCategories();
+        const accessibleCategoryIds = accessibleCategories.map(cat => cat.id);
+        console.log('✅ Категории получены:', accessibleCategoryIds.length);
+
+        const userObject = user.toSafeObject();
+        // Удаляем roleData из объекта пользователя (он слишком большой и не нужен на фронте)
+        delete userObject.roleData;
+
+        const response = {
             success: true,
             message: 'Успешная авторизация',
             token,
-            user: user.toSafeObject()
-        });
+            user: {
+                ...userObject,
+                roleName: user.roleData.name
+            },
+            permissions,
+            accessibleCategoryIds
+        };
+
+        console.log('📤 Отправляем ответ с ключами:', Object.keys(response));
+
+        res.json(response);
 
     } catch (error) {
         console.error('Login error:', error);

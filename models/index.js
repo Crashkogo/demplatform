@@ -1,15 +1,11 @@
+// models/index.js (ПОЛНАЯ ВЕРСИЯ)
 const { sequelize } = require('../config/database');
 const User = require('./User');
 const Category = require('./Category');
 const Material = require('./Material');
+const Role = require('./Role'); // ДОБАВИЛИ
 
-// Определяем связи между моделями
-
-// Связи для Category (уже определены в модели Category)
-// Category.belongsTo(Category, { as: 'parent', foreignKey: 'parentId' });
-// Category.hasMany(Category, { as: 'children', foreignKey: 'parentId' });
-
-// Связи для Material
+// === СВЯЗИ ДЛЯ MATERIAL ===
 Material.belongsTo(Category, { 
     as: 'category', 
     foreignKey: 'categoryId' 
@@ -20,7 +16,6 @@ Material.belongsTo(User, {
     foreignKey: 'uploadedBy' 
 });
 
-// Обратные связи
 Category.hasMany(Material, { 
     as: 'materials', 
     foreignKey: 'categoryId' 
@@ -31,10 +26,39 @@ User.hasMany(Material, {
     foreignKey: 'uploadedBy' 
 });
 
+// === СВЯЗИ ДЛЯ ROLE (НОВОЕ) ===
+
+// User -> Role (многие к одному)
+User.belongsTo(Role, {
+    foreignKey: 'roleId',
+    as: 'roleData'
+});
+
+Role.hasMany(User, {
+    foreignKey: 'roleId',
+    as: 'users'
+});
+
+// Role <-> Category (многие ко многим)
+Role.belongsToMany(Category, {
+    through: 'role_categories',
+    foreignKey: 'role_id',
+    otherKey: 'category_id',
+    as: 'allowedCategories'
+});
+
+Category.belongsToMany(Role, {
+    through: 'role_categories',
+    foreignKey: 'category_id',
+    otherKey: 'role_id',
+    as: 'roles'
+});
+
 // Экспортируем модели и соединение
 module.exports = {
     sequelize,
     User,
     Category,
-    Material
+    Material,
+    Role // ДОБАВИЛИ
 };

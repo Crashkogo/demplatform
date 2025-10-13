@@ -1,7 +1,8 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { Category, Material } = require('../models');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
+const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
 
 const router = express.Router();
 
@@ -48,15 +49,49 @@ function invalidateCategoriesCache() {
     categoriesCache.timestamp = null;
 }
 
-// GET /api/categories - Получение дерева категорий (временно без кэширования)
-router.get('/', authenticateToken, async (req, res) => {
+// GET /api/categories - Получение дерева категорий с учетом прав доступа
+router.get('/', [authenticateToken, addAccessibleCategories], async (req, res) => {
     try {
         console.log('Запрос категорий от пользователя:', req.user.login);
 
-        // Загружаем из БД без кэширования для отладки
-        const tree = await Category.getTree();
+        // Загружаем все категории
+        const allCategories = await Category.findAll({
+            where: { isActive: true },
+            order: [['level', 'ASC'], ['order', 'ASC'], ['name', 'ASC']]
+        });
 
-        console.log('Найдено категорий:', tree.length);
+        let filteredCategories;
+
+        // Если пользователь имеет доступ ко всем категориям
+        if (req.accessibleCategories === 'all') {
+            filteredCategories = allCategories;
+        } else {
+            // Фильтруем категории по доступным
+            const accessibleIds = new Set(req.accessibleCategories);
+            filteredCategories = allCategories.filter(cat => accessibleIds.has(cat.id));
+        }
+
+        // Строим дерево из отфильтрованных категорий
+        const categoryMap = {};
+        const tree = [];
+
+        filteredCategories.forEach(cat => {
+            const categoryData = cat.toJSON();
+            categoryMap[categoryData.id] = { ...categoryData, children: [] };
+        });
+
+        filteredCategories.forEach(cat => {
+            const categoryData = cat.toJSON();
+            const parentId = categoryData.parentId;
+
+            if (parentId && categoryMap[parentId]) {
+                categoryMap[parentId].children.push(categoryMap[categoryData.id]);
+            } else {
+                tree.push(categoryMap[categoryData.id]);
+            }
+        });
+
+        console.log('Найдено доступных категорий:', filteredCategories.length);
 
         res.json({
             success: true,
@@ -71,23 +106,70 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 });
 
-// GET /api/categories/flat - Получение плоского списка категорий
-router.get('/flat', authenticateToken, async (req, res) => {
+// GET /api/categories/flat - Получение плоского списка категорий с учетом прав
+router.get('/flat', [authenticateToken, addAccessibleCategories], async (req, res) => {
     try {
-        const categories = await Category.findAll({
+        const allCategories = await Category.findAll({
             where: { isActive: true },
             order: [['level', 'ASC'], ['order', 'ASC'], ['name', 'ASC']]
         });
 
+        let filteredCategories;
+
+        // Если пользователь имеет доступ ко всем категориям
+        if (req.accessibleCategories === 'all') {
+            filteredCategories = allCategories;
+        } else {
+            // Фильтруем категории по доступным
+            const accessibleIds = new Set(req.accessibleCategories);
+            filteredCategories = allCategories.filter(cat => accessibleIds.has(cat.id));
+        }
+
         res.json({
             success: true,
-            data: categories
+            data: filteredCategories
         });
     } catch (error) {
         console.error('Get flat categories error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения категорий'
+        });
+    }
+});
+
+// GET /api/categories/accessible - Получение доступных категорий для текущего пользователя
+router.get('/accessible', [authenticateToken, addAccessibleCategories], async (req, res) => {
+    try {
+        let accessibleCategories;
+
+        if (req.accessibleCategories === 'all') {
+            // Пользователь имеет доступ ко всем категориям
+            accessibleCategories = await Category.findAll({
+                where: { isActive: true },
+                order: [['level', 'ASC'], ['order', 'ASC'], ['name', 'ASC']]
+            });
+        } else {
+            // Пользователь имеет доступ только к определенным категориям
+            accessibleCategories = await Category.findAll({
+                where: {
+                    id: req.accessibleCategories,
+                    isActive: true
+                },
+                order: [['level', 'ASC'], ['order', 'ASC'], ['name', 'ASC']]
+            });
+        }
+
+        res.json({
+            success: true,
+            data: accessibleCategories,
+            hasFullAccess: req.accessibleCategories === 'all'
+        });
+    } catch (error) {
+        console.error('Get accessible categories error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения доступных категорий'
         });
     }
 });
@@ -160,8 +242,8 @@ router.get('/:id/materials', authenticateToken, async (req, res) => {
     }
 });
 
-// POST /api/categories - Создание новой категории (только админ)
-router.post('/', [authenticateToken, requireAdmin, ...categoryValidation], async (req, res) => {
+// POST /api/categories - Создание новой категории
+router.post('/', [authenticateToken, checkAccess('canCreateCategories'), ...categoryValidation], async (req, res) => {
     try {
         console.log('Создание категории - полученные данные:', req.body);
 
@@ -237,8 +319,8 @@ router.post('/', [authenticateToken, requireAdmin, ...categoryValidation], async
     }
 });
 
-// PUT /api/categories/:id - Обновление категории (только админ)
-router.put('/:id', [authenticateToken, requireAdmin, ...categoryValidation], async (req, res) => {
+// PUT /api/categories/:id - Обновление категории
+router.put('/:id', [authenticateToken, checkAccess('canEditCategories'), ...categoryValidation], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -316,8 +398,8 @@ router.put('/:id', [authenticateToken, requireAdmin, ...categoryValidation], asy
     }
 });
 
-// DELETE /api/categories/:id - Удаление категории (только админ)
-router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
+// DELETE /api/categories/:id - Удаление категории
+router.delete('/:id', [authenticateToken, checkAccess('canDeleteCategories')], async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -365,4 +447,4 @@ router.delete('/:id', [authenticateToken, requireAdmin], async (req, res) => {
     }
 });
 
-module.exports = router; 
+module.exports = router;
