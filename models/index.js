@@ -4,6 +4,7 @@ const User = require('./User');
 const Category = require('./Category');
 const Material = require('./Material');
 const Role = require('./Role'); // ДОБАВИЛИ
+const AuditEvent = require('./AuditEvent')(sequelize);
 
 // === СВЯЗИ ДЛЯ MATERIAL ===
 Material.belongsTo(Category, { 
@@ -54,11 +55,16 @@ Category.belongsToMany(Role, {
     as: 'roles'
 });
 
+// === СВЯЗИ ДЛЯ AUDITEVENT ===
+AuditEvent.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(AuditEvent, { foreignKey: 'userId' });
+
 // Экспортируем модели и соединение
 module.exports = {
     sequelize,
     User,
     Category,
     Material,
-    Role // ДОБАВИЛИ
+    Role, // ДОБАВИЛИ
+    AuditEvent
 };

@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { Category, Material } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
+const { logEvent } = require('../services/auditService');
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
 
 const router = express.Router();
@@ -291,6 +292,12 @@ router.post('/', [authenticateToken, checkAccess('canCreateCategories'), ...cate
         // Инвалидируем кэш категорий
         invalidateCategoriesCache();
 
+        // Логируем событие
+        logEvent(req.user.id, 'CREATE_CATEGORY', {
+            categoryId: category.id,
+            categoryName: category.name
+        });
+
         console.log('Категория успешно создана:', {
             id: category.id,
             name: category.name,
@@ -354,7 +361,7 @@ router.put('/:id', [authenticateToken, checkAccess('canEditCategories'), ...cate
         }
 
         // Проверяем, что категория не пытается стать дочерней самой себе
-        if (parentId === id) {
+        if (parentId && parentId.toString() === id) {
             return res.status(400).json({
                 success: false,
                 message: 'Категория не может быть родительской для самой себя'
@@ -362,7 +369,7 @@ router.put('/:id', [authenticateToken, checkAccess('canEditCategories'), ...cate
         }
 
         // Проверяем, существует ли родительская категория
-        if (parentId && parentId !== category.parentId?.toString()) {
+        if (parentId && parentId !== category.parentId) {
             const parentCategory = await Category.findByPk(parentId);
             if (!parentCategory) {
                 return res.status(400).json({
@@ -371,6 +378,8 @@ router.put('/:id', [authenticateToken, checkAccess('canEditCategories'), ...cate
                 });
             }
         }
+
+        const oldName = category.name;
 
         // Обновляем поля
         category.name = name;
@@ -383,6 +392,13 @@ router.put('/:id', [authenticateToken, checkAccess('canEditCategories'), ...cate
 
         // Инвалидируем кэш категорий
         invalidateCategoriesCache();
+
+        // Логируем событие
+        logEvent(req.user.id, 'UPDATE_CATEGORY', {
+            categoryId: category.id,
+            oldName: oldName,
+            newName: category.name
+        });
 
         res.json({
             success: true,
@@ -428,6 +444,12 @@ router.delete('/:id', [authenticateToken, checkAccess('canDeleteCategories')], a
                 message: 'Нельзя удалить категорию, которая содержит материалы'
             });
         }
+
+        // Логируем событие перед удалением
+        logEvent(req.user.id, 'DELETE_CATEGORY', {
+            categoryId: category.id,
+            categoryName: category.name
+        });
 
         await category.destroy();
 

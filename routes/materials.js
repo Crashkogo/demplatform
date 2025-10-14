@@ -6,6 +6,7 @@ const { Material, Category } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
 const { handleUpload, deleteFile } = require('../middleware/upload');
+const { logEvent } = require('../services/auditService');
 
 const router = express.Router();
 
@@ -265,6 +266,12 @@ router.get('/:id/download', [authenticateToken, checkAccess('canDownloadMaterial
             console.error('Error incrementing download count:', err)
         );
 
+        // Логируем событие скачивания
+        logEvent(req.user.id, 'DOWNLOAD_MATERIAL', {
+            materialId: material.id,
+            materialTitle: material.title
+        });
+
         // Получаем статистику файла
         const stat = fs.statSync(filePath);
         const fileSize = stat.size;
@@ -403,6 +410,12 @@ router.post('/', [authenticateToken, checkAccess('canCreateMaterials'), handleUp
             ]
         });
 
+        // Логируем событие
+        logEvent(req.user.id, 'CREATE_MATERIAL', {
+            materialId: material.id,
+            materialTitle: material.title
+        });
+
         res.status(201).json({
             success: true,
             message: 'Материал загружен успешно',
@@ -482,6 +495,13 @@ router.put('/:id', [authenticateToken, checkAccess('canEditMaterials')], async (
             message: 'Материал обновлен успешно',
             data: materialWithAssociations
         });
+
+        // Логируем событие
+        logEvent(req.user.id, 'UPDATE_MATERIAL', {
+            materialId: material.id,
+            materialTitle: material.title
+        });
+
     } catch (error) {
         console.error('Update material error:', error);
         res.status(500).json({
@@ -503,6 +523,12 @@ router.delete('/:id', [authenticateToken, checkAccess('canDeleteMaterials')], as
                 message: 'Материал не найден'
             });
         }
+
+        // Логируем событие перед удалением
+        logEvent(req.user.id, 'DELETE_MATERIAL', {
+            materialId: material.id,
+            materialTitle: material.title
+        });
 
         // Удаляем файл с диска
         deleteFile(material.filePath);

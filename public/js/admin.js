@@ -186,6 +186,10 @@ function initializeEventListeners() {
 
     // Форма загрузки
     document.getElementById('uploadForm').addEventListener('submit', handleUpload);
+
+    // Фильтры истории
+    document.getElementById('applyHistoryFilters').addEventListener('click', () => loadHistoryLogs(1));
+    document.getElementById('resetHistoryFilters').addEventListener('click', resetHistoryFiltersAndLoad);
 }
 
 // Инициализация обработчиков модальных окон
@@ -306,6 +310,9 @@ async function showSection(sectionName) {
                 break;
             case 'upload':
                 await loadUploadSection();
+                break;
+            case 'history-section':
+                await loadHistorySection();
                 break;
         }
     } catch (error) {
@@ -1735,5 +1742,158 @@ window.deleteCategory = deleteCategory;
 window.editMaterial = editMaterial;
 window.deleteMaterial = deleteMaterial;
 window.viewMaterial = viewMaterial;
+
+
+// --- Раздел "История действий" ---
+
+// Глобальные переменные для истории
+let historyCurrentPage = 1;
+const HISTORY_ITEMS_PER_PAGE = 15;
+
+// Инициализация раздела истории
+async function loadHistorySection() {
+    // Устанавливаем сегодняшнюю дату по умолчанию
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('historyDateFrom').value = today;
+    document.getElementById('historyDateTo').value = today;
+
+    await loadHistoryUsers();
+    await loadHistoryLogs(1);
+}
+
+// Загрузка пользователей для фильтра
+async function loadHistoryUsers() {
+    const userSelect = document.getElementById('historyUser');
+    // Загружаем, только если список пуст
+    if (userSelect.options.length > 1) {
+        return;
+    }
+
+    try {
+        if (allUsers.length === 0) {
+            const response = await axios.get('/api/admin/users');
+            if (response.data.success) {
+                allUsers = response.data.data;
+            }
+        }
+        allUsers.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = user.login;
+            userSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки пользователей для фильтра истории:', error);
+        showError('Не удалось загрузить список пользователей');
+    }
+}
+
+// Загрузка логов с сервера
+async function loadHistoryLogs(page = 1) {
+    historyCurrentPage = page;
+    const tbody = document.getElementById('historyTableBody');
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border" role="status"></div></td></tr>';
+
+    try {
+        const params = {
+            page: historyCurrentPage,
+            limit: HISTORY_ITEMS_PER_PAGE,
+            dateFrom: document.getElementById('historyDateFrom').value,
+            dateTo: document.getElementById('historyDateTo').value,
+            eventType: document.getElementById('historyEventType').value,
+            userId: document.getElementById('historyUser').value
+        };
+
+        const response = await axios.get('/api/admin/logs', { params });
+
+        if (response.data.success) {
+            renderHistoryLogs(response.data.data.rows);
+            renderHistoryPagination(response.data.data.count);
+        } else {
+            showError(response.data.message);
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Ошибка загрузки истории</td></tr>';
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки истории:', error);
+        showError(error.response?.data?.message || 'Ошибка загрузки истории');
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Ошибка загрузки истории</td></tr>';
+    }
+}
+
+// Отображение логов в таблице
+function renderHistoryLogs(logs) {
+    const tbody = document.getElementById('historyTableBody');
+    tbody.innerHTML = '';
+
+    if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">История за данный период отсутствует</td></tr>';
+        return;
+    }
+
+    const eventTypeMap = {
+        CREATE_CATEGORY: 'Создание категории',
+        UPDATE_CATEGORY: 'Редактирование категории',
+        DELETE_CATEGORY: 'Удаление категории',
+        CREATE_MATERIAL: 'Создание материала',
+        UPDATE_MATERIAL: 'Редактирование материала',
+        DELETE_MATERIAL: 'Удаление материала',
+        DOWNLOAD_MATERIAL: 'Скачивание материала'
+    };
+
+    logs.forEach(log => {
+        const row = document.createElement('tr');
+        const eventDate = new Date(log.createdAt).toLocaleString('ru-RU');
+        const userName = log.User ? log.User.login : 'Система';
+        const eventName = eventTypeMap[log.eventType] || log.eventType;
+        
+        let details = '';
+        if (log.details) {
+            details = Object.entries(log.details)
+                .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
+                .join('<br>');
+        }
+
+        row.innerHTML = `
+            <td>${eventDate}</td>
+            <td>${userName}</td>
+            <td><span class="badge bg-info">${eventName}</span></td>
+            <td><small>${details}</small></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Рендеринг пагинации
+function renderHistoryPagination(totalItems) {
+    const paginationUl = document.getElementById('historyPagination');
+    paginationUl.innerHTML = '';
+    const totalPages = Math.ceil(totalItems / HISTORY_ITEMS_PER_PAGE);
+
+    if (totalPages <= 1) return;
+
+    for (let i = 1; i <= totalPages; i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === historyCurrentPage ? 'active' : ''}`;
+        const a = document.createElement('a');
+        a.className = 'page-link';
+        a.href = '#';
+        a.textContent = i;
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            loadHistoryLogs(i);
+        });
+        li.appendChild(a);
+        paginationUl.appendChild(li);
+    }
+}
+
+// Сброс фильтров
+function resetHistoryFiltersAndLoad() {
+    document.getElementById('historyDateFrom').value = '';
+    document.getElementById('historyDateTo').value = '';
+    document.getElementById('historyEventType').value = '';
+    document.getElementById('historyUser').value = '';
+    loadHistoryLogs(1);
+}
 
 

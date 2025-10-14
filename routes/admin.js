@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { User, Material, Category, sequelize } = require('../models');
+const { User, Material, Category, sequelize, AuditEvent } = require('../models');
+const { Op } = require('sequelize');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
@@ -330,6 +331,53 @@ router.get('/materials', [authenticateToken, requireAdmin], async (req, res) => 
         res.status(500).json({
             success: false,
             message: 'Ошибка получения материалов'
+        });
+    }
+});
+
+// GET /api/admin/logs - Получение истории действий
+router.get('/logs', [authenticateToken, requireAdmin], async (req, res) => {
+    try {
+        const { page = 1, limit = 15, dateFrom, dateTo, eventType, userId } = req.query;
+
+        const whereClause = {};
+
+        if (userId) {
+            whereClause.userId = userId;
+        }
+        if (eventType) {
+            whereClause.eventType = eventType;
+        }
+        // Применяем фильтр по дате, только если даты не пустые
+        if (dateFrom && dateTo) {
+            whereClause.createdAt = { [Op.between]: [new Date(dateFrom), new Date(dateTo)] };
+        } else if (dateFrom) {
+            whereClause.createdAt = { [Op.gte]: new Date(dateFrom) };
+        } else if (dateTo) {
+            whereClause.createdAt = { [Op.lte]: new Date(dateTo) };
+        }
+
+        const { rows, count } = await AuditEvent.findAndCountAll({
+            where: whereClause,
+            include: [{
+                model: User,
+                attributes: ['id', 'login']
+            }],
+            order: [['createdAt', 'DESC']],
+            limit: parseInt(limit),
+            offset: (parseInt(page) - 1) * parseInt(limit)
+        });
+
+        res.json({
+            success: true,
+            data: { rows, count }
+        });
+
+    } catch (error) {
+        console.error('Get audit logs error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения истории действий'
         });
     }
 });

@@ -19,6 +19,7 @@
     "db:reset": "node scripts/reset-db.js",
     "db:status": "node scripts/db-status.js",
     "db:setup": "npm run db:migrate && npm run db:seed",
+    "db:migrate:audit": "node scripts/migrate-add-audit-events.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate:roles": "node scripts/migrate-add-roles.js"
   },
