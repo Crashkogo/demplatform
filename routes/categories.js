@@ -50,6 +50,33 @@ function invalidateCategoriesCache() {
     categoriesCache.timestamp = null;
 }
 
+// Вспомогательная функция для получения полного пути категории
+async function getCategoryPath(categoryId) {
+    if (!categoryId) return '';
+
+    const category = await Category.findByPk(categoryId);
+    if (!category) return '';
+
+    // Используем поле path, которое уже есть в модели
+    const pathIds = category.path.split('/').filter(Boolean);
+    
+    const categories = await Category.findAll({
+        where: {
+            id: pathIds
+        },
+        order: [['level', 'ASC']]
+    });
+
+    const categoryMap = new Map(categories.map(c => [c.id.toString(), c.name]));
+    const pathNames = pathIds.map(id => categoryMap.get(id.toString()));
+
+    if (pathNames.length === 1) {
+        return `*/${pathNames[0]}`;
+    }
+
+    return pathNames.join('/');
+}
+
 // GET /api/categories - Получение дерева категорий с учетом прав доступа
 router.get('/', [authenticateToken, addAccessibleCategories], async (req, res) => {
     try {
@@ -293,9 +320,9 @@ router.post('/', [authenticateToken, checkAccess('canCreateCategories'), ...cate
         invalidateCategoriesCache();
 
         // Логируем событие
+        const categoryPath = await getCategoryPath(category.id);
         logEvent(req.user.id, 'CREATE_CATEGORY', {
-            categoryId: category.id,
-            categoryName: category.name
+            'Категория': categoryPath
         });
 
         console.log('Категория успешно создана:', {
@@ -394,10 +421,11 @@ router.put('/:id', [authenticateToken, checkAccess('canEditCategories'), ...cate
         invalidateCategoriesCache();
 
         // Логируем событие
+        const categoryPath = await getCategoryPath(category.id);
         logEvent(req.user.id, 'UPDATE_CATEGORY', {
-            categoryId: category.id,
-            oldName: oldName,
-            newName: category.name
+            'Категория': categoryPath,
+            'Старое название': oldName,
+            'Новое название': category.name
         });
 
         res.json({
@@ -446,9 +474,9 @@ router.delete('/:id', [authenticateToken, checkAccess('canDeleteCategories')], a
         }
 
         // Логируем событие перед удалением
+        const deletedCategoryPath = await getCategoryPath(category.id);
         logEvent(req.user.id, 'DELETE_CATEGORY', {
-            categoryId: category.id,
-            categoryName: category.name
+            'Категория': deletedCategoryPath
         });
 
         await category.destroy();

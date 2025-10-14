@@ -349,12 +349,23 @@ router.get('/logs', [authenticateToken, requireAdmin], async (req, res) => {
             whereClause.eventType = eventType;
         }
         // Применяем фильтр по дате, только если даты не пустые
-        if (dateFrom && dateTo) {
-            whereClause.createdAt = { [Op.between]: [new Date(dateFrom), new Date(dateTo)] };
-        } else if (dateFrom) {
-            whereClause.createdAt = { [Op.gte]: new Date(dateFrom) };
-        } else if (dateTo) {
-            whereClause.createdAt = { [Op.lte]: new Date(dateTo) };
+        if (dateFrom) {
+            const startDate = new Date(dateFrom);
+            startDate.setHours(0, 0, 0, 0); // Устанавливаем время на самое начало дня
+            whereClause.createdAt = { [Op.gte]: startDate };
+        }
+
+        if (dateTo) {
+            const endDate = new Date(dateTo);
+            endDate.setHours(23, 59, 59, 999); // Устанавливаем время на самый конец дня
+            
+            if (whereClause.createdAt) {
+                // Если уже есть условие для dateFrom, добавляем к нему
+                whereClause.createdAt[Op.lte] = endDate;
+            } else {
+                // Иначе создаем новое условие
+                whereClause.createdAt = { [Op.lte]: endDate };
+            }
         }
 
         const { rows, count } = await AuditEvent.findAndCountAll({

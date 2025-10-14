@@ -1848,9 +1848,23 @@ function renderHistoryLogs(logs) {
         
         let details = '';
         if (log.details) {
-            details = Object.entries(log.details)
-                .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
-                .join('<br>');
+            const categoryPath = log.details['Путь к категории'] || log.details['Категория'];
+            const materialTitle = log.details['Название материала'];
+            const oldName = log.details['Старое название'];
+            const newName = log.details['Новое название'];
+
+            if (materialTitle) { // Событие материала
+                details = `<div>${categoryPath}</div><div>${materialTitle}</div>`;
+            } else if (categoryPath) { // Событие категории
+                details = `<div>${categoryPath}</div>`;
+                if (oldName && newName) {
+                    details += `<div><small>Переименовано с <strong>${oldName}</strong> на <strong>${newName}</strong></small></div>`;
+                }
+            } else { // Резервный вариант для других событий
+                details = Object.entries(log.details)
+                    .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
+                    .join('<br>');
+            }
         }
 
         row.innerHTML = `

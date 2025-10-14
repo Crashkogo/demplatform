@@ -33,6 +33,33 @@ const materialValidation = [
         })
 ];
 
+// Вспомогательная функция для получения полного пути категории
+async function getCategoryPath(categoryId) {
+    if (!categoryId) return '';
+
+    const category = await Category.findByPk(categoryId);
+    if (!category) return '';
+
+    // Используем поле path, которое уже есть в модели
+    const pathIds = category.path.split('/').filter(Boolean);
+    
+    const categories = await Category.findAll({
+        where: {
+            id: pathIds
+        },
+        order: [['level', 'ASC']]
+    });
+
+    const categoryMap = new Map(categories.map(c => [c.id.toString(), c.name]));
+    const pathNames = pathIds.map(id => categoryMap.get(id.toString()));
+
+    if (pathNames.length === 1) {
+        return `*/${pathNames[0]}`;
+    }
+
+    return pathNames.join('/');
+}
+
 // Функция для определения типа файла по MIME-типу
 function determineFileType(mimeType) {
     if (!mimeType) return 'other';
@@ -267,9 +294,10 @@ router.get('/:id/download', [authenticateToken, checkAccess('canDownloadMaterial
         );
 
         // Логируем событие скачивания
+        const categoryPath = await getCategoryPath(material.categoryId);
         logEvent(req.user.id, 'DOWNLOAD_MATERIAL', {
-            materialId: material.id,
-            materialTitle: material.title
+            'Путь к категории': categoryPath,
+            'Название материала': material.title
         });
 
         // Получаем статистику файла
@@ -411,9 +439,10 @@ router.post('/', [authenticateToken, checkAccess('canCreateMaterials'), handleUp
         });
 
         // Логируем событие
+        const categoryPath = await getCategoryPath(material.categoryId);
         logEvent(req.user.id, 'CREATE_MATERIAL', {
-            materialId: material.id,
-            materialTitle: material.title
+            'Путь к категории': categoryPath,
+            'Название материала': material.title
         });
 
         res.status(201).json({
@@ -497,9 +526,10 @@ router.put('/:id', [authenticateToken, checkAccess('canEditMaterials')], async (
         });
 
         // Логируем событие
+        const categoryPath = await getCategoryPath(material.categoryId);
         logEvent(req.user.id, 'UPDATE_MATERIAL', {
-            materialId: material.id,
-            materialTitle: material.title
+            'Путь к категории': categoryPath,
+            'Название материала': material.title
         });
 
     } catch (error) {
@@ -525,9 +555,10 @@ router.delete('/:id', [authenticateToken, checkAccess('canDeleteMaterials')], as
         }
 
         // Логируем событие перед удалением
+        const categoryPath = await getCategoryPath(material.categoryId);
         logEvent(req.user.id, 'DELETE_MATERIAL', {
-            materialId: material.id,
-            materialTitle: material.title
+            'Путь к категории': categoryPath,
+            'Название материала': material.title
         });
 
         // Удаляем файл с диска
