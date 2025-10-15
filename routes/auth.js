@@ -88,22 +88,48 @@ router.post('/login', loginValidation, async (req, res) => {
         console.log('✅ Категории получены:', accessibleCategoryIds.length);
 
         const userObject = user.toSafeObject();
-        // Удаляем roleData из объекта пользователя (он слишком большой и не нужен на фронте)
-        delete userObject.roleData;
+
+        // Формируем объект пользователя с вложенной ролью (такой же формат как в /api/auth/me)
+        const userWithRole = {
+            ...userObject,
+            Role: {
+                id: user.roleData.id,
+                name: user.roleData.name,
+                description: user.roleData.description,
+                isAdmin: user.roleData.isAdmin,
+                canViewMaterials: user.roleData.canViewMaterials,
+                canDownloadMaterials: user.roleData.canDownloadMaterials,
+                canCreateMaterials: user.roleData.canCreateMaterials,
+                canEditMaterials: user.roleData.canEditMaterials,
+                canDeleteMaterials: user.roleData.canDeleteMaterials,
+                canCreateCategories: user.roleData.canCreateCategories,
+                canEditCategories: user.roleData.canEditCategories,
+                canDeleteCategories: user.roleData.canDeleteCategories,
+                canManageAllCategories: user.roleData.canManageAllCategories,
+                canViewUsers: user.roleData.canViewUsers,
+                canCreateUsers: user.roleData.canCreateUsers,
+                canEditUsers: user.roleData.canEditUsers,
+                canDeleteUsers: user.roleData.canDeleteUsers,
+                canManageRoles: user.roleData.canManageRoles,
+                canViewLogs: user.roleData.canViewLogs,
+                allowedCategories: user.roleData.allowedCategories || []
+            }
+        };
 
         const response = {
             success: true,
             message: 'Успешная авторизация',
             token,
-            user: {
-                ...userObject,
-                roleName: user.roleData.name
-            },
+            user: userWithRole,
             permissions,
             accessibleCategoryIds
         };
 
-        console.log('📤 Отправляем ответ с ключами:', Object.keys(response));
+        console.log('📤 Отправляем ответ логина для пользователя:', {
+            login: userWithRole.login,
+            roleName: userWithRole.Role.name,
+            isAdmin: userWithRole.Role.isAdmin
+        });
 
         res.json(response);
 
@@ -119,9 +145,47 @@ router.post('/login', loginValidation, async (req, res) => {
 // GET /api/auth/me - Получение информации о текущем пользователе
 router.get('/me', authenticateToken, async (req, res) => {
     try {
+        const userObject = req.user.toSafeObject();
+
+        // Добавляем информацию о роли
+        const roleData = req.user.roleData;
+
+        // Формируем объект пользователя с вложенной ролью
+        const userWithRole = {
+            ...userObject,
+            Role: {
+                id: roleData.id,
+                name: roleData.name,
+                description: roleData.description,
+                isAdmin: roleData.isAdmin,
+                canViewMaterials: roleData.canViewMaterials,
+                canDownloadMaterials: roleData.canDownloadMaterials,
+                canCreateMaterials: roleData.canCreateMaterials,
+                canEditMaterials: roleData.canEditMaterials,
+                canDeleteMaterials: roleData.canDeleteMaterials,
+                canCreateCategories: roleData.canCreateCategories,
+                canEditCategories: roleData.canEditCategories,
+                canDeleteCategories: roleData.canDeleteCategories,
+                canManageAllCategories: roleData.canManageAllCategories,
+                canViewUsers: roleData.canViewUsers,
+                canCreateUsers: roleData.canCreateUsers,
+                canEditUsers: roleData.canEditUsers,
+                canDeleteUsers: roleData.canDeleteUsers,
+                canManageRoles: roleData.canManageRoles,
+                canViewLogs: roleData.canViewLogs,
+                allowedCategories: roleData.allowedCategories || []
+            }
+        };
+
+        console.log('📤 /api/auth/me - Отправляем пользователя:', {
+            login: userWithRole.login,
+            roleName: userWithRole.Role.name,
+            isAdmin: userWithRole.Role.isAdmin
+        });
+
         res.json({
             success: true,
-            user: req.user.toSafeObject()
+            user: userWithRole
         });
     } catch (error) {
         console.error('Get user info error:', error);

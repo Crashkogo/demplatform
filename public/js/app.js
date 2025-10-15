@@ -43,68 +43,110 @@ document.addEventListener('DOMContentLoaded', function () {
 // Инициализация
 async function initializeApp() {
     try {
-        // Проверяем авторизацию
-        if (!checkAuth()) {
+        // Проверяем наличие токена в localStorage.
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.log('Токен не найден, перенаправление на страницу входа');
             window.location.href = '/';
             return;
         }
+        currentToken = token;
 
-        // Инициализируем компоненты
+        // Асинхронно инициализируем менеджер прав. Это загрузит свежие данные с сервера.
+        const isInitialized = await PermissionsManager.initialize();
+
+        if (!isInitialized) {
+            console.error('Не удалось инициализировать PermissionsManager');
+            logout();
+            return;
+        }
+
+        // Настраиваем UI на основе полученных прав
+        setupUserInterface();
+
+        // Инициализируем остальные компоненты приложения.
         initializeEventListeners();
         await loadCategories();
         await loadMaterials();
         setupFuseSearch();
 
-        // Проверяем, есть ли параметр материала в URL
+        // Проверяем, есть ли параметр материала в URL для авто-открытия.
         checkForMaterialParameter();
 
-        console.log('Приложение инициализировано');
+        console.log('Приложение инициализировано корректно.');
     } catch (error) {
         console.error('Ошибка инициализации:', error);
         showError('Ошибка загрузки приложения');
+        logout();
     }
 }
 
-// Проверка авторизации
-function checkAuth() {
-    const token = localStorage.getItem('token');
-    const user = localStorage.getItem('user');
+// Настройка пользовательского интерфейса на основе прав
+function setupUserInterface() {
+    // Получаем данные пользователя из PermissionsManager (всегда актуальные)
+    const user = PermissionsManager.getUser();
 
-    if (!token || !user) {
-        return false;
-    }
-
-    try {
-        currentToken = token;
-        currentUser = JSON.parse(user);
-
-        // Обновляем информацию о пользователе в интерфейсе
-        document.getElementById('userInfo').textContent = currentUser.login;
-        // Отображаем название роли из данных пользователя
-        const roleName = currentUser.roleName || 'Не указана';
-        document.getElementById('userRole').textContent = `Роль: ${roleName}`;
-
-        // Показываем кнопки админ-панели если есть права для доступа к админке
-        if (PermissionsManager.isAdmin() ||
-            PermissionsManager.canViewSection('users') ||
-            PermissionsManager.canViewSection('roles') ||
-            PermissionsManager.canViewSection('categories') ||
-            PermissionsManager.canViewSection('materials')) {
-            const adminPanelBtn = document.getElementById('adminPanelBtn');
-            const adminMenuLink = document.getElementById('adminMenuLink');
-            const adminMenuDivider = document.getElementById('adminMenuDivider');
-
-            if (adminPanelBtn) adminPanelBtn.style.display = 'block';
-            if (adminMenuLink) adminMenuLink.style.display = 'block';
-            if (adminMenuDivider) adminMenuDivider.style.display = 'block';
-        }
-
-        return true;
-    } catch (error) {
-        console.error('Ошибка парсинга данных пользователя:', error);
+    if (!user) {
+        console.error('Данные пользователя не найдены в PermissionsManager');
         logout();
-        return false;
+        return;
     }
+
+    console.log('Настраиваем UI для пользователя:', user);
+
+    // Сохраняем текущего пользователя в глобальную переменную
+    currentUser = user;
+
+    // Обновляем информацию о пользователе в интерфейсе
+    const userInfoElement = document.getElementById('userInfo');
+    const userRoleElement = document.getElementById('userRole');
+
+    if (userInfoElement) {
+        userInfoElement.textContent = user.login;
+    }
+
+    if (userRoleElement) {
+        // Используем roleName из PermissionsManager, который был установлен при обработке данных
+        const roleName = user.roleName || 'Не назначена';
+        userRoleElement.textContent = `Роль: ${roleName}`;
+        console.log('Отображаемая роль:', roleName);
+    }
+
+    // Показываем кнопки админ-панели, если есть права
+    const hasAdminAccess = PermissionsManager.isAdmin() ||
+        PermissionsManager.canViewSection('users') ||
+        PermissionsManager.canViewSection('roles') ||
+        PermissionsManager.canViewSection('categories') ||
+        PermissionsManager.canViewSection('materials') ||
+        PermissionsManager.canViewSection('upload') ||
+        PermissionsManager.canViewSection('history-section');
+
+    console.log('Проверка доступа к админ-панели:', hasAdminAccess);
+
+    if (hasAdminAccess) {
+        const adminPanelBtn = document.getElementById('adminPanelBtn');
+        const adminMenuLink = document.getElementById('adminMenuLink');
+        const adminMenuDivider = document.getElementById('adminMenuDivider');
+
+        if (adminPanelBtn) {
+            adminPanelBtn.style.display = 'block';
+            console.log('Кнопка админ-панели отображена');
+        }
+        if (adminMenuLink) {
+            adminMenuLink.style.display = 'block';
+        }
+        if (adminMenuDivider) {
+            adminMenuDivider.style.display = 'block';
+        }
+    } else {
+        console.log('У пользователя нет доступа к админ-панели');
+    }
+}
+
+// Проверка авторизации (устаревшая функция для обратной совместимости)
+function checkAuth() {
+    console.warn('checkAuth() устарела, используйте setupUserInterface()');
+    return PermissionsManager.isInitialized;
 }
 
 // Инициализация обработчиков событий

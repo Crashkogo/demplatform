@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { User, Material, Category, sequelize, AuditEvent } = require('../models');
 const { Op } = require('sequelize');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
 
 const router = express.Router();
 
@@ -302,18 +303,18 @@ router.delete('/users/:id', [authenticateToken, requireAdmin], async (req, res) 
 });
 
 // GET /api/admin/materials - Получение списка материалов для админки
-router.get('/materials', [authenticateToken, requireAdmin], async (req, res) => {
+router.get('/materials', [authenticateToken, checkAccess('canViewMaterials'), addAccessibleCategories], async (req, res) => {
     try {
-        const { page = 1, limit = 20, search, categoryId, fileType } = req.query;
+        const { page = 1, limit = 1000, search, categoryId, fileType } = req.query;
 
         const options = {
             categoryId,
             fileType,
             limit: parseInt(limit),
-            skip: (parseInt(page) - 1) * parseInt(limit)
+            offset: (parseInt(page) - 1) * parseInt(limit),
+            accessibleCategoryIds: req.accessibleCategories === 'all' ? null : req.accessibleCategories
         };
 
-        // Используем оптимизированный метод поиска из модели
         const result = await Material.search(search, options);
 
         res.json({

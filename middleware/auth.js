@@ -16,14 +16,34 @@ const authenticateToken = async (req, res, next) => {
         }
 
         const decoded = jwt.verify(token, config.jwtSecret);
+
+        // Загружаем пользователя с ролью
+        const { Role } = require('../models');
         const user = await User.findByPk(decoded.userId, {
-            attributes: { exclude: ['password'] }
+            attributes: { exclude: ['password'] },
+            include: [{
+                model: Role,
+                as: 'roleData',
+                include: [{
+                    association: 'allowedCategories',
+                    through: { attributes: [] }
+                }]
+            }]
         });
 
         if (!user) {
             return res.status(401).json({
                 success: false,
                 message: 'Пользователь не найден'
+            });
+        }
+
+        // Проверяем наличие роли
+        if (!user.roleData) {
+            console.error('❌ Роль не найдена для пользователя:', user.login);
+            return res.status(403).json({
+                success: false,
+                message: 'Роль пользователя не найдена. Обратитесь к администратору.'
             });
         }
 

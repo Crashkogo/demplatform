@@ -65,90 +65,138 @@ function preventDefaultDragBehavior() {
 // Инициализация
 async function initializeApp() {
     try {
-        // Проверяем авторизацию
-        if (!checkAuth()) {
-            window.location.href = '/';
+        console.log('Инициализация админ-панели...');
+
+        // 1. Проверяем наличие токена
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.log('Токен не найден, перенаправление на страницу входа');
+            logout();
             return;
         }
 
-        // Проверяем доступ к админке (любое административное право)
-        if (!canAccessAdmin()) {
-            alert('Доступ запрещен. У вас нет прав для доступа к админ-панели.');
-            window.location.href = '/app';
+        // 2. Устанавливаем глобальный токен для axios interceptor
+        currentToken = token;
+
+        // 3. Инициализируем менеджер прав (загружает данные с сервера)
+        const isAuthSuccess = await PermissionsManager.initialize();
+
+        if (!isAuthSuccess) {
+            console.error('Не удалось инициализировать PermissionsManager');
+            logout();
             return;
         }
 
-        // Скрываем разделы, к которым нет доступа
-        setupMenuVisibility();
+        // Получаем данные пользователя
+        const user = PermissionsManager.getUser();
+        if (!user) {
+            console.error('Данные пользователя не получены');
+            logout();
+            return;
+        }
 
-        // Инициализируем компоненты
+        console.log('Пользователь загружен:', {
+            login: user.login,
+            roleName: user.roleName,
+            isAdmin: PermissionsManager.isAdmin()
+        });
+
+        // 4. Настраиваем весь UI на основе полученных прав
+        setupUIBasedOnPermissions();
+
+        // 5. Инициализируем остальные компоненты
         initializeEventListeners();
-        // НЕ инициализируем Dropzone сразу - только при переходе на вкладку
-        await loadDashboard();
 
-        console.log('Админ-панель инициализирована');
+        console.log('Админ-панель инициализирована корректно');
+
     } catch (error) {
-        console.error('Ошибка инициализации:', error);
-        showError('Ошибка загрузки админ-панели');
+        console.error('Критическая ошибка инициализации:', error);
+        showError('Критическая ошибка загрузки админ-панели');
+        logout();
     }
 }
 
-// Проверка доступа к админ-панели
-function canAccessAdmin() {
-    return PermissionsManager.isAdmin() ||
-        PermissionsManager.canViewSection('users') ||
-        PermissionsManager.canViewSection('roles') ||
-        PermissionsManager.canViewSection('categories') ||
-        PermissionsManager.canViewSection('materials');
+/**
+ * Настраивает весь пользовательский интерфейс на основе прав доступа.
+ * Эта функция должна вызываться один раз после успешной инициализации PermissionsManager.
+ */
+function setupUIBasedOnPermissions() {
+    // 1. Обновляем информацию о пользователе в шапке
+    const user = PermissionsManager.getUser();
+    if (user) {
+        document.getElementById('userInfo').textContent = user.login;
+        document.querySelector('.dropdown-header').textContent = user.login;
+    }
+
+    // 2. Настраиваем видимостсь пунктов меню в сайдбаре
+    const visibleSections = setupSidebarVisibility();
+
+    // 3. Настраиваем видимость кнопок "Добавить"
+    setupActionButtonsVisibility();
+
+    // 4. Открываем первый доступный раздел по умолчанию
+    if (visibleSections.length > 0) {
+        // Убираем 'active' класс со всех ссылок и секций по умолчанию
+        document.querySelectorAll('.nav-link.active').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.content-section.active').forEach(el => el.classList.remove('active'));
+
+        // Показываем первую доступную секцию
+        showSection(visibleSections[0]);
+    } else {
+        // Если ни один раздел не доступен, показываем сообщение
+        showError('Доступ запрещен. У вас нет прав для просмотра админ-панели.');
+        // Можно скрыть основной контент и показать сообщение об ошибке
+        document.querySelector('.main-content').innerHTML = '<div class="alert alert-danger">У вас нет прав для доступа к этому разделу.</div>';
+    }
 }
 
-// Настройка видимости меню на основе прав
-function setupMenuVisibility() {
-    // Скрываем кнопки разделов, к которым нет доступа
-    const menuItems = [
-        { id: 'dashboardBtn', section: 'dashboard', always: true }, // Dashboard всегда доступен
-        { id: 'usersBtn', section: 'users' },
-        { id: 'rolesBtn', section: 'roles' },
-        { id: 'categoriesBtn', section: 'categories' },
-        { id: 'materialsBtn', section: 'materials' },
-        { id: 'uploadBtn', section: 'upload' }
+/**
+ * Настраивает видимость пунктов меню в сайдбаре на основе прав.
+ * @returns {string[]} - Массив идентификаторов видимых секций.
+ */
+function setupSidebarVisibility() {
+    const visibleSections = [];
+    const menuItems = document.querySelectorAll('.sidebar .nav-link[data-section]');
+
+    menuItems.forEach(link => {
+        const section = link.dataset.section;
+        if (PermissionsManager.canViewSection(section)) {
+            link.parentElement.style.display = ''; // Показываем li элемент
+            visibleSections.push(section);
+        } else {
+            link.parentElement.style.display = 'none'; // Скрываем li элемент
+        }
+    });
+    return visibleSections;
+}
+
+/**
+ * Настраивает видимость основных кнопок для создания сущностей.
+ */
+function setupActionButtonsVisibility() {
+    const buttons = [
+        { selector: '[data-bs-target="#userModal"]', permission: 'canCreateUsers' },
+        { selector: '[data-bs-target="#roleModal"]', permission: 'canManageRoles' },
+        { selector: '[data-bs-target="#categoryModal"]', permission: 'canCreateCategories' },
     ];
 
-    menuItems.forEach(item => {
-        const btn = document.getElementById(item.id);
-        if (btn) {
-            if (item.always || PermissionsManager.canViewSection(item.section)) {
-                btn.style.display = '';
-            } else {
-                btn.style.display = 'none';
-            }
+    buttons.forEach(({ selector, permission }) => {
+        const button = document.querySelector(selector);
+        if (button) {
+            button.style.display = PermissionsManager.has(permission) ? '' : 'none';
         }
     });
 }
 
-// Проверка авторизации
+
+// Проверка авторизации (больше не нужна, логика в PermissionsManager)
 function checkAuth() {
-    const token = localStorage.getItem('token');
-    const user = localStorage.getItem('user');
-
-    if (!token || !user) {
-        return false;
-    }
-
-    try {
-        currentToken = token;
-        currentUser = JSON.parse(user);
-
-        // Обновляем информацию о пользователе в интерфейсе
-        document.getElementById('userInfo').textContent = currentUser.login;
-
-        return true;
-    } catch (error) {
-        console.error('Ошибка парсинга данных пользователя:', error);
-        logout();
-        return false;
-    }
+    // Эта функция устарела. PermissionsManager.initialize() теперь является единой точкой входа.
+    // Оставляем для обратной совместимости, если где-то вызывается, но она должна вернуть true,
+    // так как initializeApp не продолжится без успешной авторизации.
+    return true;
 }
+
 
 // Инициализация обработчиков событий
 function initializeEventListeners() {
@@ -256,12 +304,6 @@ function initializeModalHandlers() {
 async function showSection(sectionName) {
     try {
         console.log('Переходим к разделу:', sectionName);
-
-        // Проверяем права доступа к разделу (кроме dashboard)
-        if (sectionName !== 'dashboard' && !PermissionsManager.canViewSection(sectionName)) {
-            showError('У вас нет прав для доступа к этому разделу');
-            return;
-        }
 
         // Если уходим с раздела upload, очищаем Dropzone
         const currentActiveSection = document.querySelector('.content-section.active');
@@ -1845,7 +1887,7 @@ function renderHistoryLogs(logs) {
         const eventDate = new Date(log.createdAt).toLocaleString('ru-RU');
         const userName = log.User ? log.User.login : 'Система';
         const eventName = eventTypeMap[log.eventType] || log.eventType;
-        
+
         let details = '';
         if (log.details) {
             const categoryPath = log.details['Путь к категории'] || log.details['Категория'];

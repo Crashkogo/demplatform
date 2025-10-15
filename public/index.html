@@ -236,17 +236,12 @@
                 const response = await axios.post('/api/auth/login', credentials);
 
                 if (response.data.success) {
-                    // Сохраняем токен и пользователя
+                    // Сохраняем токен и пользователя в localStorage
                     localStorage.setItem('token', response.data.token);
                     localStorage.setItem('user', JSON.stringify(response.data.user));
 
-                    // Сохраняем права пользователя
-                    if (response.data.permissions && response.data.accessibleCategoryIds) {
-                        PermissionsManager.setPermissions(
-                            response.data.permissions,
-                            response.data.accessibleCategoryIds
-                        );
-                    }
+                    // Устанавливаем права в менеджере, передавая весь объект пользователя
+                    PermissionsManager.setPermissions(response.data.user);
 
                     showAlert('Успешная авторизация! Перенаправление...', 'success');
 

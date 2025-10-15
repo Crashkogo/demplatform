@@ -41,14 +41,32 @@ class Material extends Model {
             isActive: true
         };
 
+        let finalCategoryIds = accessibleCategoryIds;
+
+        // Если пользователь указал конкретную категорию для фильтрации
         if (categoryId) {
-            whereClause.categoryId = categoryId;
+            const requestedCategoryId = parseInt(categoryId, 10);
+
+            // Если у пользователя есть ограничения по категориям
+            if (finalCategoryIds && Array.isArray(finalCategoryIds)) {
+                // Проверяем, есть ли у него доступ к запрашиваемой категории
+                if (finalCategoryIds.includes(requestedCategoryId)) {
+                    // Если да, то ищем только в этой категории
+                    finalCategoryIds = [requestedCategoryId];
+                } else {
+                    // Если нет, возвращаем пустой результат, так как это попытка доступа к запрещенной категории
+                    return { materials: [], total: 0, hasMore: false };
+                }
+            } else {
+                // Если ограничений нет (админ), просто используем запрошенную категорию
+                finalCategoryIds = [requestedCategoryId];
+            }
         }
 
-        // Фильтрация по доступным категориям
-        if (accessibleCategoryIds && Array.isArray(accessibleCategoryIds) && accessibleCategoryIds.length > 0) {
+        // Применяем итоговый фильтр по категориям
+        if (finalCategoryIds && Array.isArray(finalCategoryIds) && finalCategoryIds.length > 0) {
             whereClause.categoryId = {
-                [sequelize.Sequelize.Op.in]: accessibleCategoryIds
+                [sequelize.Sequelize.Op.in]: finalCategoryIds
             };
         }
 
