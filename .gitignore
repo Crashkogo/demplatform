@@ -62,3 +62,15 @@ Thumbs.db
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Genkit
+.genkit/
+
+# Gemini
+.gemini/
+
+# Project structure file
+project_structure.txt
+
+# Nodemon configuration
+nodemon.json

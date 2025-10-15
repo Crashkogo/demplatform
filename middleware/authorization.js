@@ -143,7 +143,19 @@ const addAccessibleCategories = async (req, res, next) => {
 
         // Получаем доступные категории
         const accessibleCategories = await role.getAccessibleCategories();
-        req.accessibleCategories = accessibleCategories.map(cat => cat.id);
+
+        // Если у пользователя есть права на работу с материалами/категориями,
+        // но конкретные категории не назначены, даём доступ ко всем
+        const hasMaterialPermissions = role.canViewMaterials || role.canCreateMaterials ||
+            role.canEditMaterials || role.canDeleteMaterials;
+        const hasCategoryPermissions = role.canCreateCategories || role.canEditCategories ||
+            role.canDeleteCategories;
+
+        if ((hasMaterialPermissions || hasCategoryPermissions) && accessibleCategories.length === 0) {
+            req.accessibleCategories = 'all';
+        } else {
+            req.accessibleCategories = accessibleCategories.map(cat => cat.id);
+        }
 
         next();
     } catch (error) {

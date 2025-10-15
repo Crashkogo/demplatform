@@ -118,8 +118,39 @@ router.get('/stats', [authenticateToken, requireAdmin], async (req, res) => {
     }
 });
 
+// Middleware для проверки доступа к списку пользователей (canViewUsers ИЛИ canViewLogs)
+const canViewUsersList = async (req, res, next) => {
+    try {
+        const { Role } = require('../models');
+        const role = await Role.findByPk(req.user.roleId);
+
+        if (!role) {
+            return res.status(403).json({
+                success: false,
+                message: 'Роль не найдена'
+            });
+        }
+
+        // Администратор или пользователь с правами canViewUsers или canViewLogs
+        if (role.isAdmin || role.canViewUsers || role.canViewLogs) {
+            return next();
+        }
+
+        return res.status(403).json({
+            success: false,
+            message: 'Доступ запрещен: недостаточно прав для просмотра списка пользователей'
+        });
+    } catch (error) {
+        console.error('canViewUsersList middleware error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Ошибка проверки прав доступа'
+        });
+    }
+};
+
 // GET /api/admin/users - Получение списка пользователей
-router.get('/users', [authenticateToken, requireAdmin], async (req, res) => {
+router.get('/users', [authenticateToken, canViewUsersList], async (req, res) => {
     try {
         const { page = 1, limit = 20, search } = req.query;
 
@@ -302,8 +333,40 @@ router.delete('/users/:id', [authenticateToken, requireAdmin], async (req, res) 
     }
 });
 
+// Middleware для проверки доступа к списку материалов (любое право на работу с материалами)
+const canAccessMaterialsList = async (req, res, next) => {
+    try {
+        const { Role } = require('../models');
+        const role = await Role.findByPk(req.user.roleId);
+
+        if (!role) {
+            return res.status(403).json({
+                success: false,
+                message: 'Роль не найдена'
+            });
+        }
+
+        // Администратор или пользователь с любым правом на работу с материалами
+        if (role.isAdmin || role.canViewMaterials || role.canCreateMaterials ||
+            role.canEditMaterials || role.canDeleteMaterials) {
+            return next();
+        }
+
+        return res.status(403).json({
+            success: false,
+            message: 'Доступ запрещен: недостаточно прав для просмотра списка материалов'
+        });
+    } catch (error) {
+        console.error('canAccessMaterialsList middleware error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Ошибка проверки прав доступа'
+        });
+    }
+};
+
 // GET /api/admin/materials - Получение списка материалов для админки
-router.get('/materials', [authenticateToken, checkAccess('canViewMaterials'), addAccessibleCategories], async (req, res) => {
+router.get('/materials', [authenticateToken, canAccessMaterialsList, addAccessibleCategories], async (req, res) => {
     try {
         const { page = 1, limit = 1000, search, categoryId, fileType } = req.query;
 
@@ -337,7 +400,7 @@ router.get('/materials', [authenticateToken, checkAccess('canViewMaterials'), ad
 });
 
 // GET /api/admin/logs - Получение истории действий
-router.get('/logs', [authenticateToken, requireAdmin], async (req, res) => {
+router.get('/logs', [authenticateToken, checkAccess('canViewLogs')], async (req, res) => {
     try {
         const { page = 1, limit = 15, dateFrom, dateTo, eventType, userId } = req.query;
 
@@ -359,7 +422,7 @@ router.get('/logs', [authenticateToken, requireAdmin], async (req, res) => {
         if (dateTo) {
             const endDate = new Date(dateTo);
             endDate.setHours(23, 59, 59, 999); // Устанавливаем время на самый конец дня
-            
+
             if (whereClause.createdAt) {
                 // Если уже есть условие для dateFrom, добавляем к нему
                 whereClause.createdAt[Op.lte] = endDate;
