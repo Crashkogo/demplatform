@@ -38,8 +38,7 @@ async function runFinalMigration() {
             canManageRoles: true
         };
         const [adminRole] = await Role.findOrCreate({ where: { name: 'Администратор' }, defaults: adminPermissions });
-        // Всегда обновляем права на случай их изменения в коде
-        await adminRole.update(adminPermissions);
+        await adminRole.update(adminPermissions, { timestamps: false });
 
         const clientPermissions = {
             name: 'Клиент',
@@ -58,12 +57,12 @@ async function runFinalMigration() {
             await queryInterface.addColumn('users', 'role_id', {
                 type: DataTypes.INTEGER,
                 references: {
-                    model: 'roles', // Имя таблицы
+                    model: 'roles',
                     key: 'id',
                 },
                 onUpdate: 'CASCADE',
                 onDelete: 'SET NULL',
-                allowNull: true // ВРЕМЕННО разрешаем NULL
+                allowNull: true
             });
             console.log('✅ Колонка "role_id" добавлена.');
         } else {
@@ -73,7 +72,8 @@ async function runFinalMigration() {
         // --- Шаг 4: Присвоение роли по умолчанию существующим пользователям ---
         console.log('🔄 4/7: Присвоение роли "Клиент" пользователям без роли...');
         const [updatedCount] = await User.update({ roleId: clientRole.id }, {
-            where: { roleId: null }
+            where: { roleId: null },
+            timestamps: false // ВАЖНО: отключаем обновление `updated_at` для этой операции
         });
         if (updatedCount > 0) {
             console.log(`✅ 4/7: Роль по умолчанию назначена ${updatedCount} пользователям.`);
@@ -94,7 +94,7 @@ async function runFinalMigration() {
         console.log('🔄 6/7: Назначение роли "Администратор" пользователю "admin"...');
         const adminUser = await User.findOne({ where: { login: 'admin' } });
         if (adminUser) {
-            await adminUser.update({ roleId: adminRole.id });
+            await adminUser.update({ roleId: adminRole.id }, { timestamps: false });
             console.log(`✅ Пользователю "admin" успешно назначена роль "Администратор".`);
         } else {
             console.warn('⚠️ Пользователь "admin" не найден. Этот шаг пропущен.');
