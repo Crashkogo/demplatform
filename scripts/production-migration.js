@@ -7,7 +7,7 @@ const { QueryInterface, DataTypes } = require('sequelize');
 
 async function runProductionMigration() {
     const queryInterface = sequelize.getQueryInterface();
-    
+
     try {
         console.log('\n========================================');
         console.log('🚀 ЗАПУСК PRODUCTION МИГРАЦИИ');
@@ -24,9 +24,9 @@ async function runProductionMigration() {
         // ШАГ 2: Создание/обновление таблицы roles
         // ============================================
         console.log('🔧 Шаг 2/7: Проверка и обновление таблицы roles...');
-        
+
         const tables = await queryInterface.showAllTables();
-        
+
         if (!tables.includes('roles')) {
             console.log('   📝 Создание таблицы roles...');
             await queryInterface.createTable('roles', {
@@ -114,22 +114,22 @@ async function runProductionMigration() {
                 },
                 created_at: {
                     type: DataTypes.DATE,
-                    allowNull: false,
+                    allowNull: true,
                     defaultValue: DataTypes.NOW
                 },
                 updated_at: {
                     type: DataTypes.DATE,
-                    allowNull: false,
+                    allowNull: true,
                     defaultValue: DataTypes.NOW
                 }
             });
             console.log('   ✅ Таблица roles создана');
         } else {
             console.log('   ℹ️  Таблица roles существует, проверка колонок...');
-            
+
             // Получаем описание таблицы
             const roleColumns = await queryInterface.describeTable('roles');
-            
+
             // Список всех необходимых колонок
             const requiredColumns = {
                 name: { type: DataTypes.STRING(100), allowNull: false },
@@ -154,7 +154,7 @@ async function runProductionMigration() {
                 created_at: { type: DataTypes.DATE, allowNull: false },
                 updated_at: { type: DataTypes.DATE, allowNull: false }
             };
-            
+
             // Добавляем недостающие колонки
             for (const [columnName, columnDef] of Object.entries(requiredColumns)) {
                 if (!roleColumns[columnName]) {
@@ -169,29 +169,47 @@ async function runProductionMigration() {
         // ШАГ 3: Обновление таблицы users
         // ============================================
         console.log('\n🔧 Шаг 3/7: Проверка и обновление таблицы users...');
-        
+
         const userColumns = await queryInterface.describeTable('users');
-        
+
         // Добавляем created_at если его нет
         if (!userColumns.created_at) {
             console.log('   📝 Добавление колонки created_at...');
+            // Сначала добавляем как nullable
             await queryInterface.addColumn('users', 'created_at', {
+                type: DataTypes.DATE,
+                allowNull: true
+            });
+            // Заполняем текущей датой для существующих записей
+            await sequelize.query("UPDATE users SET created_at = NOW() WHERE created_at IS NULL");
+            // Теперь делаем NOT NULL
+            await queryInterface.changeColumn('users', 'created_at', {
                 type: DataTypes.DATE,
                 allowNull: false,
                 defaultValue: DataTypes.NOW
             });
+            console.log('   ✅ Колонка created_at добавлена и заполнена');
         }
-        
+
         // Добавляем updated_at если его нет
         if (!userColumns.updated_at) {
             console.log('   📝 Добавление колонки updated_at...');
+            // Сначала добавляем как nullable
             await queryInterface.addColumn('users', 'updated_at', {
+                type: DataTypes.DATE,
+                allowNull: true
+            });
+            // Заполняем текущей датой для существующих записей
+            await sequelize.query("UPDATE users SET updated_at = NOW() WHERE updated_at IS NULL");
+            // Теперь делаем NOT NULL
+            await queryInterface.changeColumn('users', 'updated_at', {
                 type: DataTypes.DATE,
                 allowNull: false,
                 defaultValue: DataTypes.NOW
             });
+            console.log('   ✅ Колонка updated_at добавлена и заполнена');
         }
-        
+
         // Добавляем role_id если его нет (временно с allowNull: true)
         if (!userColumns.role_id) {
             console.log('   📝 Добавление колонки role_id...');
@@ -206,7 +224,7 @@ async function runProductionMigration() {
                 onDelete: 'RESTRICT'
             });
         }
-        
+
         // Добавляем lastLogin если его нет
         if (!userColumns.lastLogin && !userColumns.last_login) {
             console.log('   📝 Добавление колонки last_login...');
@@ -215,72 +233,108 @@ async function runProductionMigration() {
                 allowNull: true
             });
         }
-        
+
         console.log('   ✅ Таблица users обновлена\n');
 
         // ============================================
         // ШАГ 4: Обновление таблицы categories
         // ============================================
         console.log('🔧 Шаг 4/7: Проверка и обновление таблицы categories...');
-        
+
         const categoryColumns = await queryInterface.describeTable('categories');
-        
+
         // Добавляем created_at если его нет
         if (!categoryColumns.created_at) {
             console.log('   📝 Добавление колонки created_at...');
+            // Сначала добавляем как nullable
             await queryInterface.addColumn('categories', 'created_at', {
+                type: DataTypes.DATE,
+                allowNull: true
+            });
+            // Заполняем текущей датой для существующих записей
+            await sequelize.query("UPDATE categories SET created_at = NOW() WHERE created_at IS NULL");
+            // Теперь делаем NOT NULL
+            await queryInterface.changeColumn('categories', 'created_at', {
                 type: DataTypes.DATE,
                 allowNull: false,
                 defaultValue: DataTypes.NOW
             });
+            console.log('   ✅ Колонка created_at добавлена и заполнена');
         }
-        
+
         // Добавляем updated_at если его нет
         if (!categoryColumns.updated_at) {
             console.log('   📝 Добавление колонки updated_at...');
+            // Сначала добавляем как nullable
             await queryInterface.addColumn('categories', 'updated_at', {
+                type: DataTypes.DATE,
+                allowNull: true
+            });
+            // Заполняем текущей датой для существующих записей
+            await sequelize.query("UPDATE categories SET updated_at = NOW() WHERE updated_at IS NULL");
+            // Теперь делаем NOT NULL
+            await queryInterface.changeColumn('categories', 'updated_at', {
                 type: DataTypes.DATE,
                 allowNull: false,
                 defaultValue: DataTypes.NOW
             });
+            console.log('   ✅ Колонка updated_at добавлена и заполнена');
         }
-        
+
         console.log('   ✅ Таблица categories обновлена\n');
 
         // ============================================
         // ШАГ 5: Обновление таблицы materials
         // ============================================
         console.log('🔧 Шаг 5/7: Проверка и обновление таблицы materials...');
-        
+
         const materialColumns = await queryInterface.describeTable('materials');
-        
+
         // Добавляем created_at если его нет
         if (!materialColumns.created_at) {
             console.log('   📝 Добавление колонки created_at...');
+            // Сначала добавляем как nullable
             await queryInterface.addColumn('materials', 'created_at', {
+                type: DataTypes.DATE,
+                allowNull: true
+            });
+            // Заполняем текущей датой для существующих записей
+            await sequelize.query("UPDATE materials SET created_at = NOW() WHERE created_at IS NULL");
+            // Теперь делаем NOT NULL
+            await queryInterface.changeColumn('materials', 'created_at', {
                 type: DataTypes.DATE,
                 allowNull: false,
                 defaultValue: DataTypes.NOW
             });
+            console.log('   ✅ Колонка created_at добавлена и заполнена');
         }
-        
+
         // Добавляем updated_at если его нет
         if (!materialColumns.updated_at) {
             console.log('   📝 Добавление колонки updated_at...');
+            // Сначала добавляем как nullable
             await queryInterface.addColumn('materials', 'updated_at', {
+                type: DataTypes.DATE,
+                allowNull: true
+            });
+            // Заполняем текущей датой для существующих записей
+            await sequelize.query("UPDATE materials SET updated_at = NOW() WHERE updated_at IS NULL");
+            // Теперь делаем NOT NULL
+            await queryInterface.changeColumn('materials', 'updated_at', {
                 type: DataTypes.DATE,
                 allowNull: false,
                 defaultValue: DataTypes.NOW
             });
+            console.log('   ✅ Колонка updated_at добавлена и заполнена');
         }
-        
+
         console.log('   ✅ Таблица materials обновлена\n');
 
         // ============================================
         // ШАГ 6: Создание таблицы role_categories
         // ============================================
         console.log('🔧 Шаг 6/7: Проверка промежуточной таблицы role_categories...');
-        
+
         if (!tables.includes('role_categories')) {
             console.log('   📝 Создание таблицы role_categories...');
             await queryInterface.createTable('role_categories', {
@@ -306,33 +360,33 @@ async function runProductionMigration() {
                 },
                 created_at: {
                     type: DataTypes.DATE,
-                    allowNull: false,
+                    allowNull: true,
                     defaultValue: DataTypes.NOW
                 },
                 updated_at: {
                     type: DataTypes.DATE,
-                    allowNull: false,
+                    allowNull: true,
                     defaultValue: DataTypes.NOW
                 }
             });
-            
+
             // Добавляем составной первичный ключ
             await sequelize.query(
                 'ALTER TABLE role_categories ADD PRIMARY KEY (role_id, category_id)'
             );
-            
+
             console.log('   ✅ Таблица role_categories создана');
         } else {
             console.log('   ℹ️  Таблица role_categories уже существует');
         }
-        
+
         console.log('   ✅ Промежуточная таблица готова\n');
 
         // ============================================
         // ШАГ 7: Создание/обновление таблицы audit_events
         // ============================================
         console.log('🔧 Шаг 7/7: Проверка таблицы audit_events...');
-        
+
         if (!tables.includes('audit_events')) {
             console.log('   📝 Создание таблицы audit_events...');
             await queryInterface.createTable('audit_events', {
@@ -359,12 +413,12 @@ async function runProductionMigration() {
                 },
                 created_at: {
                     type: DataTypes.DATE,
-                    allowNull: false,
+                    allowNull: true,
                     defaultValue: DataTypes.NOW
                 },
                 updated_at: {
                     type: DataTypes.DATE,
-                    allowNull: false,
+                    allowNull: true,
                     defaultValue: DataTypes.NOW
                 }
             });
@@ -372,7 +426,7 @@ async function runProductionMigration() {
         } else {
             console.log('   ℹ️  Таблица audit_events уже существует');
         }
-        
+
         console.log('\n========================================');
         console.log('📊 НАПОЛНЕНИЕ ДАННЫМИ');
         console.log('========================================\n');
@@ -381,7 +435,7 @@ async function runProductionMigration() {
         // ДАННЫЕ: Создание роли "Администратор"
         // ============================================
         console.log('👤 Создание роли "Администратор"...');
-        
+
         const [adminRole] = await sequelize.query(
             `INSERT INTO roles (
                 name, description, is_admin,
@@ -426,7 +480,7 @@ async function runProductionMigration() {
             RETURNING id`,
             { type: sequelize.QueryTypes.SELECT }
         );
-        
+
         const adminRoleId = adminRole.id;
         console.log(`✅ Роль "Администратор" создана/обновлена (ID: ${adminRoleId})\n`);
 
@@ -434,7 +488,7 @@ async function runProductionMigration() {
         // ДАННЫЕ: Создание роли "Клиент"
         // ============================================
         console.log('👤 Создание роли "Клиент" (по умолчанию)...');
-        
+
         const [clientRole] = await sequelize.query(
             `INSERT INTO roles (
                 name, description, is_admin,
@@ -454,7 +508,7 @@ async function runProductionMigration() {
             RETURNING id`,
             { type: sequelize.QueryTypes.SELECT }
         );
-        
+
         const clientRoleId = clientRole.id;
         console.log(`✅ Роль "Клиент" создана/обновлена (ID: ${clientRoleId})\n`);
 
@@ -462,7 +516,7 @@ async function runProductionMigration() {
         // ДАННЫЕ: Назначение роли пользователю admin
         // ============================================
         console.log('🔐 Назначение роли "Администратор" пользователю "admin"...');
-        
+
         const [adminUserResult] = await sequelize.query(
             `UPDATE users 
              SET role_id = :adminRoleId, updated_at = NOW()
@@ -473,7 +527,7 @@ async function runProductionMigration() {
                 type: sequelize.QueryTypes.UPDATE
             }
         );
-        
+
         if (adminUserResult && adminUserResult.length > 0) {
             console.log(`✅ Пользователю "admin" (ID: ${adminUserResult[0].id}) назначена роль "Администратор"\n`);
         } else {
@@ -484,7 +538,7 @@ async function runProductionMigration() {
         // ДАННЫЕ: Назначение роли остальным пользователям
         // ============================================
         console.log('👥 Назначение роли "Клиент" пользователям без роли...');
-        
+
         const [usersUpdated] = await sequelize.query(
             `UPDATE users 
              SET role_id = :clientRoleId, updated_at = NOW()
@@ -494,14 +548,14 @@ async function runProductionMigration() {
                 type: sequelize.QueryTypes.UPDATE
             }
         );
-        
+
         console.log(`✅ Роль "Клиент" назначена ${usersUpdated.length || 0} пользователям\n`);
 
         // ============================================
         // ФИНАЛ: Установка NOT NULL для role_id
         // ============================================
         console.log('🔒 Установка ограничения NOT NULL для role_id...');
-        
+
         await queryInterface.changeColumn('users', 'role_id', {
             type: DataTypes.INTEGER,
             allowNull: false,
@@ -512,13 +566,13 @@ async function runProductionMigration() {
             onUpdate: 'CASCADE',
             onDelete: 'RESTRICT'
         });
-        
+
         console.log('✅ Ограничение установлено\n');
 
         console.log('========================================');
         console.log('✨ МИГРАЦИЯ УСПЕШНО ЗАВЕРШЕНА!');
         console.log('========================================\n');
-        
+
         console.log('📋 Итоги:');
         console.log('   ✅ Все таблицы приведены в соответствие с моделями');
         console.log('   ✅ Роль "Администратор" создана со всеми правами');
