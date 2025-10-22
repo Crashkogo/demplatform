@@ -1,7 +1,8 @@
 // scripts/final_migration.js
 // Обновленная версия скрипта для безболезненной миграции схемы БД.
 
-const { sequelize, User, Role, DataTypes } = require('../models');
+const { sequelize, User, Role } = require('../models');
+const { DataTypes } = require('sequelize'); // Правильный импорт для DataTypes
 
 async function runFinalMigration() {
     const queryInterface = sequelize.getQueryInterface();
