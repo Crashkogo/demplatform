@@ -20,6 +20,9 @@
     "db:status": "node scripts/db-status.js",
     "db:setup": "npm run db:migrate && npm run db:seed",
     "db:migrate:audit": "node scripts/migrate-add-audit-events.js",
+    "db:migrate:production": "node scripts/production-migration.js",
+    "db:verify": "node scripts/verify-migration.js",
+    "db:create-admin": "node scripts/create-admin-with-role.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate:roles": "node scripts/migrate-add-roles.js"
   },
