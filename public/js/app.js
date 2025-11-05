@@ -976,10 +976,19 @@ async function downloadMaterial(materialId) {
     try {
         console.log('Скачиваем материал:', materialId);
 
+        // Получаем токен напрямую из localStorage для надежности
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('❌ Токен не найден в localStorage');
+            throw new Error('Токен авторизации не найден');
+        }
+
+        console.log('🔑 Используем токен для скачивания материала');
+
         const response = await fetch(`/api/materials/${materialId}/download`, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${currentToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
 
@@ -1089,9 +1098,18 @@ async function loadVideoContent(materialId, mimeType) {
     try {
         console.log('Загружаем видео:', materialId);
 
+        // Получаем токен напрямую из localStorage для надежности
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('❌ Токен не найден в localStorage');
+            throw new Error('Токен авторизации не найден');
+        }
+
+        console.log('🔑 Используем токен для загрузки видео');
+
         const response = await fetch(`/api/materials/${materialId}/view`, {
             headers: {
-                'Authorization': `Bearer ${currentToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
 
@@ -1152,9 +1170,18 @@ async function loadImageContent(materialId) {
     try {
         console.log('Загружаем изображение:', materialId);
 
+        // Получаем токен напрямую из localStorage для надежности
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('❌ Токен не найден в localStorage');
+            throw new Error('Токен авторизации не найден');
+        }
+
+        console.log('🔑 Используем токен для загрузки изображения');
+
         const response = await fetch(`/api/materials/${materialId}/view`, {
             headers: {
-                'Authorization': `Bearer ${currentToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
 
@@ -1227,10 +1254,19 @@ async function loadPDFDocument(materialId) {
         const pagesContainer = document.getElementById('pdfPagesContainer');
         const scrollContainer = document.getElementById('pdfScrollContainer');
 
+        // Получаем токен напрямую из localStorage для надежности
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('❌ Токен не найден в localStorage');
+            throw new Error('Токен авторизации не найден');
+        }
+
+        console.log('🔑 Используем токен для загрузки PDF');
+
         // Загружаем PDF
         const response = await fetch(`/api/materials/${materialId}/view`, {
             headers: {
-                'Authorization': `Bearer ${currentToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
 
@@ -1292,9 +1328,18 @@ async function loadDOCXDocument(materialId) {
     try {
         console.log('Загружаем DOCX документ:', materialId);
 
+        // Получаем токен напрямую из localStorage для надежности
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('❌ Токен не найден в localStorage');
+            throw new Error('Токен авторизации не найден');
+        }
+
+        console.log('🔑 Используем токен для загрузки DOCX');
+
         const response = await fetch(`/api/materials/${materialId}/view`, {
             headers: {
-                'Authorization': `Bearer ${currentToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
 
@@ -1338,9 +1383,18 @@ async function loadTextDocument(materialId) {
     try {
         console.log('Загружаем текстовый документ:', materialId);
 
+        // Получаем токен напрямую из localStorage для надежности
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('❌ Токен не найден в localStorage');
+            throw new Error('Токен авторизации не найден');
+        }
+
+        console.log('🔑 Используем токен для загрузки текстового документа');
+
         const response = await fetch(`/api/materials/${materialId}/view`, {
             headers: {
-                'Authorization': `Bearer ${currentToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
 
