@@ -774,13 +774,16 @@ function showMaterialModal(material) {
                 </div>
             `;
         } else if (isOfficeDoc) {
-            // Полноэкранный iframe для офисных документов
+            // Office документы нельзя просмотреть в браузере напрямую
             bodyContent = `
                 <div class="fullscreen-document-viewer">
-                    <div class="document-content" style="padding: 0;">
-                        <iframe src="/api/materials/${material.id}/view" 
-                                title="${material.title}">
-                        </iframe>
+                    <div class="document-content d-flex align-items-center justify-content-center">
+                        <div class="text-center">
+                            <i class="bi bi-file-earmark-word display-1 text-muted"></i>
+                            <h5 class="mt-3">Предварительный просмотр Office документов недоступен</h5>
+                            <p class="text-muted">Тип файла: ${material.mimeType}</p>
+                            <p class="text-muted">Используйте кнопку "Скачать" для открытия файла в соответствующем приложении</p>
+                        </div>
                     </div>
                 </div>
             `;
