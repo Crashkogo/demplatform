@@ -9,6 +9,7 @@ const authenticateToken = async (req, res, next) => {
         const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
         if (!token) {
+            console.error('❌ Токен не предоставлен для:', req.method, req.originalUrl);
             return res.status(401).json({
                 success: false,
                 message: 'Токен доступа не предоставлен'
@@ -16,6 +17,7 @@ const authenticateToken = async (req, res, next) => {
         }
 
         const decoded = jwt.verify(token, config.jwtSecret);
+        console.log('✅ Токен верифицирован для пользователя ID:', decoded.userId);
 
         // Загружаем пользователя с ролью
         const { Role } = require('../models');

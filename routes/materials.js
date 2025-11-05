@@ -181,7 +181,7 @@ router.get('/:id', [authenticateToken, addAccessibleCategories], async (req, res
 });
 
 // GET /api/materials/:id/view - Просмотр файла материала
-router.get('/:id/view', [authenticateToken, checkAccess('canViewMaterials'), addAccessibleCategories], async (req, res) => {
+router.get('/:id/view', [authenticateToken, addAccessibleCategories], async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -193,8 +193,29 @@ router.get('/:id/view', [authenticateToken, checkAccess('canViewMaterials'), add
             });
         }
 
-        // Проверяем доступ к категории материала
-        if (req.accessibleCategories !== 'all') {
+        // Проверяем наличие права на просмотр материалов
+        const user = req.user;
+        const role = user.roleData;
+
+        if (!role) {
+            console.error('❌ Роль не найдена для пользователя:', user.login);
+            return res.status(403).json({
+                success: false,
+                message: 'Роль пользователя не найдена'
+            });
+        }
+
+        // Администратор или полный доступ - разрешаем
+        if (role.isAdmin || role.canManageAllCategories) {
+            console.log('✅ Администратор или полный доступ - просмотр разрешен');
+        } else if (!role.canViewMaterials) {
+            // Проверяем право на просмотр материалов
+            return res.status(403).json({
+                success: false,
+                message: 'Доступ запрещен: нет права на просмотр материалов'
+            });
+        } else if (req.accessibleCategories !== 'all') {
+            // Проверяем доступ к категории материала
             if (!req.accessibleCategories.includes(material.categoryId)) {
                 return res.status(403).json({
                     success: false,
@@ -256,7 +277,7 @@ router.get('/:id/view', [authenticateToken, checkAccess('canViewMaterials'), add
 });
 
 // GET /api/materials/:id/download - Скачивание файла материала
-router.get('/:id/download', [authenticateToken, checkAccess('canDownloadMaterials'), addAccessibleCategories], async (req, res) => {
+router.get('/:id/download', [authenticateToken, addAccessibleCategories], async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -268,8 +289,29 @@ router.get('/:id/download', [authenticateToken, checkAccess('canDownloadMaterial
             });
         }
 
-        // Проверяем доступ к категории материала
-        if (req.accessibleCategories !== 'all') {
+        // Проверяем наличие права на скачивание материалов
+        const user = req.user;
+        const role = user.roleData;
+
+        if (!role) {
+            console.error('❌ Роль не найдена для пользователя:', user.login);
+            return res.status(403).json({
+                success: false,
+                message: 'Роль пользователя не найдена'
+            });
+        }
+
+        // Администратор или полный доступ - разрешаем
+        if (role.isAdmin || role.canManageAllCategories) {
+            console.log('✅ Администратор или полный доступ - скачивание разрешено');
+        } else if (!role.canDownloadMaterials) {
+            // Проверяем право на скачивание материалов
+            return res.status(403).json({
+                success: false,
+                message: 'Доступ запрещен: нет права на скачивание материалов'
+            });
+        } else if (req.accessibleCategories !== 'all') {
+            // Проверяем доступ к категории материала
             if (!req.accessibleCategories.includes(material.categoryId)) {
                 return res.status(403).json({
                     success: false,

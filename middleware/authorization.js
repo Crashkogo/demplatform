@@ -125,18 +125,23 @@ const addAccessibleCategories = async (req, res, next) => {
         });
 
         if (!user) {
+            console.error('❌ Пользователь не найден при добавлении доступных категорий:', req.user.id);
             return res.status(403).json({ success: false, message: 'Пользователь не найден' });
         }
 
         const role = user.roleData;
 
         if (!role) {
+            console.error('❌ Роль не найдена для пользователя:', user.login);
             req.accessibleCategories = [];
             return next();
         }
 
+        console.log('🔍 Проверка доступа для роли:', role.name, '| isAdmin:', role.isAdmin, '| canManageAllCategories:', role.canManageAllCategories);
+
         // Администратор или полный доступ
         if (role.isAdmin || role.canManageAllCategories) {
+            console.log('✅ Полный доступ ко всем категориям');
             req.accessibleCategories = 'all';
             return next();
         }
@@ -152,9 +157,11 @@ const addAccessibleCategories = async (req, res, next) => {
             role.canDeleteCategories;
 
         if ((hasMaterialPermissions || hasCategoryPermissions) && accessibleCategories.length === 0) {
+            console.log('✅ Есть права на материалы/категории, но категории не назначены - даём полный доступ');
             req.accessibleCategories = 'all';
         } else {
             req.accessibleCategories = accessibleCategories.map(cat => cat.id);
+            console.log('🔍 Доступные категории:', req.accessibleCategories);
         }
 
         next();
