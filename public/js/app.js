@@ -715,11 +715,16 @@ function showMaterialModal(material) {
     } else if (material.fileType === 'document') {
         // Полноэкранный просмотрщик документов
         const isPDF = material.mimeType === 'application/pdf';
-        const isDOCX = material.mimeType.includes('wordprocessingml') || material.originalName?.toLowerCase().includes('.docx');
-        const isOfficeDoc = material.mimeType.includes('word') || material.mimeType.includes('excel') || material.mimeType.includes('powerpoint') ||
-            material.mimeType.includes('opendocument') || material.originalName?.includes('.doc') ||
-            material.originalName?.includes('.xls') || material.originalName?.includes('.ppt') ||
-            material.originalName?.includes('.odt') || material.originalName?.includes('.ods') || material.originalName?.includes('.odp');
+        const isDOCX = material.mimeType.includes('wordprocessingml') || material.originalName?.toLowerCase().endsWith('.docx');
+        const isDOC = material.mimeType === 'application/msword' || material.originalName?.toLowerCase().endsWith('.doc');
+        const isXLSX = material.mimeType.includes('spreadsheet') || material.mimeType.includes('excel') ||
+            material.originalName?.toLowerCase().endsWith('.xlsx') || material.originalName?.toLowerCase().endsWith('.xls');
+        const isPPTX = material.mimeType.includes('presentation') || material.mimeType.includes('powerpoint') ||
+            material.originalName?.toLowerCase().endsWith('.pptx') || material.originalName?.toLowerCase().endsWith('.ppt');
+        const isODF = material.mimeType.includes('opendocument') ||
+            material.originalName?.toLowerCase().endsWith('.odt') ||
+            material.originalName?.toLowerCase().endsWith('.ods') ||
+            material.originalName?.toLowerCase().endsWith('.odp');
 
         if (isPDF) {
             // Полноэкранный PDF просмотрщик
@@ -773,16 +778,64 @@ function showMaterialModal(material) {
                     </div>
                 </div>
             `;
-        } else if (isOfficeDoc) {
-            // Office документы нельзя просмотреть в браузере напрямую
+        } else if (isDOC) {
+            // Старый формат Word (.doc)
+            bodyContent = `
+                <div class="fullscreen-document-viewer">
+                    <div class="document-content">
+                        <div id="docContainer" style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; min-height: calc(100vh - 40px); box-shadow: 0 0 20px rgba(0,0,0,0.1);">
+                            <div class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Загрузка документа...</span>
+                                </div>
+                                <div class="mt-3">Загрузка документа...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (isXLSX) {
+            // Excel документы
+            bodyContent = `
+                <div class="fullscreen-document-viewer">
+                    <div class="document-content" style="background: #f5f5f5;">
+                        <div id="xlsxContainer" style="max-width: 100%; margin: 0 auto; padding: 20px; min-height: calc(100vh - 40px);">
+                            <div class="text-center">
+                                <div class="spinner-border text-success" role="status">
+                                    <span class="visually-hidden">Загрузка таблицы...</span>
+                                </div>
+                                <div class="mt-3">Загрузка таблицы...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (isPPTX) {
+            // PowerPoint презентации
+            bodyContent = `
+                <div class="fullscreen-document-viewer">
+                    <div class="document-content" style="background: #2c3e50;">
+                        <div id="pptxContainer" style="max-width: 1200px; margin: 0 auto; padding: 20px; min-height: calc(100vh - 40px);">
+                            <div class="text-center">
+                                <div class="spinner-border text-warning" role="status">
+                                    <span class="visually-hidden">Загрузка презентации...</span>
+                                </div>
+                                <div class="mt-3 text-white">Загрузка презентации...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (isODF) {
+            // ODF документы - пока без поддержки просмотра
             bodyContent = `
                 <div class="fullscreen-document-viewer">
                     <div class="document-content d-flex align-items-center justify-content-center">
                         <div class="text-center">
-                            <i class="bi bi-file-earmark-word display-1 text-muted"></i>
-                            <h5 class="mt-3">Предварительный просмотр Office документов недоступен</h5>
+                            <i class="bi bi-file-earmark-text display-1 text-muted"></i>
+                            <h5 class="mt-3">Предварительный просмотр ODF документов недоступен</h5>
                             <p class="text-muted">Тип файла: ${material.mimeType}</p>
-                            <p class="text-muted">Используйте кнопку "Скачать" для открытия файла в соответствующем приложении</p>
+                            <p class="text-muted">Используйте кнопку "Скачать" для открытия файла в LibreOffice или OpenOffice</p>
                         </div>
                     </div>
                 </div>
@@ -1234,13 +1287,24 @@ async function loadImageContent(materialId) {
 // Загрузка контента документа
 async function loadDocumentContent(material) {
     const isPDF = material.mimeType === 'application/pdf';
-    const isDOCX = material.mimeType.includes('wordprocessingml') || material.originalName?.toLowerCase().includes('.docx');
-    const isText = material.mimeType.includes('text/') || material.originalName?.toLowerCase().includes('.txt');
+    const isDOCX = material.mimeType.includes('wordprocessingml') || material.originalName?.toLowerCase().endsWith('.docx');
+    const isDOC = material.mimeType === 'application/msword' || material.originalName?.toLowerCase().endsWith('.doc');
+    const isXLSX = material.mimeType.includes('spreadsheet') || material.mimeType.includes('excel') ||
+        material.originalName?.toLowerCase().endsWith('.xlsx') || material.originalName?.toLowerCase().endsWith('.xls');
+    const isPPTX = material.mimeType.includes('presentation') || material.mimeType.includes('powerpoint') ||
+        material.originalName?.toLowerCase().endsWith('.pptx') || material.originalName?.toLowerCase().endsWith('.ppt');
+    const isText = material.mimeType.includes('text/') || material.originalName?.toLowerCase().endsWith('.txt');
 
     if (isPDF) {
         await loadPDFDocument(material.id);
     } else if (isDOCX) {
         await loadDOCXDocument(material.id);
+    } else if (isDOC) {
+        await loadDOCDocument(material.id);
+    } else if (isXLSX) {
+        await loadXLSXDocument(material.id);
+    } else if (isPPTX) {
+        await loadPPTXDocument(material.id);
     } else if (isText) {
         await loadTextDocument(material.id);
     }
@@ -1419,6 +1483,613 @@ async function loadTextDocument(materialId) {
                     <i class="bi bi-exclamation-triangle display-1 text-warning"></i>
                     <h5 class="mt-3">Ошибка загрузки файла</h5>
                     <p class="text-muted">Не удалось загрузить текстовый файл</p>
+                </div>
+            `;
+        }
+    }
+}
+
+// Загрузка Excel документа (.xlsx, .xls)
+async function loadXLSXDocument(materialId) {
+    try {
+        console.log('Загружаем Excel документ:', materialId);
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('❌ Токен не найден в localStorage');
+            throw new Error('Токен авторизации не найден');
+        }
+
+        const response = await fetch(`/api/materials/${materialId}/view`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки Excel файла');
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+        console.log('Excel загружен, листов:', workbook.SheetNames.length);
+
+        const container = document.getElementById('xlsxContainer');
+
+        // Создаём вкладки для листов
+        let tabsHtml = '<ul class="nav nav-tabs mb-3" id="excelTabs" role="tablist">';
+        let contentHtml = '<div class="tab-content" id="excelTabContent">';
+
+        workbook.SheetNames.forEach((sheetName, index) => {
+            const isActive = index === 0;
+            const tabId = `sheet-${index}`;
+
+            tabsHtml += `
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link ${isActive ? 'active' : ''}" id="${tabId}-tab"
+                            data-bs-toggle="tab" data-bs-target="#${tabId}" type="button"
+                            role="tab" aria-controls="${tabId}" aria-selected="${isActive}">
+                        <i class="bi bi-table me-1"></i>${sheetName}
+                    </button>
+                </li>
+            `;
+
+            const worksheet = workbook.Sheets[sheetName];
+            const htmlTable = XLSX.utils.sheet_to_html(worksheet, { editable: false });
+
+            contentHtml += `
+                <div class="tab-pane fade ${isActive ? 'show active' : ''}" id="${tabId}"
+                     role="tabpanel" aria-labelledby="${tabId}-tab">
+                    <div class="table-responsive" style="max-height: calc(100vh - 200px); overflow: auto;">
+                        ${htmlTable}
+                    </div>
+                </div>
+            `;
+        });
+
+        tabsHtml += '</ul>';
+        contentHtml += '</div>';
+
+        // Стили для таблицы
+        const styles = `
+            <style>
+                #xlsxContainer table {
+                    border-collapse: collapse;
+                    width: 100%;
+                    background: white;
+                    font-size: 14px;
+                }
+                #xlsxContainer table td, #xlsxContainer table th {
+                    border: 1px solid #dee2e6;
+                    padding: 8px 12px;
+                    text-align: left;
+                    white-space: nowrap;
+                }
+                #xlsxContainer table th {
+                    background: #f8f9fa;
+                    font-weight: 600;
+                    position: sticky;
+                    top: 0;
+                    z-index: 1;
+                }
+                #xlsxContainer table tr:nth-child(even) {
+                    background: #f8f9fa;
+                }
+                #xlsxContainer table tr:hover {
+                    background: #e9ecef;
+                }
+                #xlsxContainer .nav-tabs {
+                    background: white;
+                    padding: 10px 10px 0;
+                    border-radius: 8px 8px 0 0;
+                }
+                #xlsxContainer .nav-link {
+                    color: #495057;
+                }
+                #xlsxContainer .nav-link.active {
+                    background: #28a745;
+                    color: white;
+                    border-color: #28a745;
+                }
+                #xlsxContainer .tab-content {
+                    background: white;
+                    border-radius: 0 0 8px 8px;
+                    padding: 15px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+            </style>
+        `;
+
+        container.innerHTML = styles + tabsHtml + contentHtml;
+
+        console.log('Excel отображён успешно');
+
+    } catch (error) {
+        console.error('Ошибка загрузки Excel:', error);
+        const container = document.getElementById('xlsxContainer');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center p-4" style="background: white; border-radius: 8px;">
+                    <i class="bi bi-exclamation-triangle display-1 text-warning"></i>
+                    <h5 class="mt-3">Ошибка загрузки таблицы</h5>
+                    <p class="text-muted">Не удалось загрузить Excel документ</p>
+                    <p class="text-muted small">${error.message}</p>
+                </div>
+            `;
+        }
+    }
+}
+
+// Загрузка PowerPoint презентации (.pptx, .ppt)
+async function loadPPTXDocument(materialId) {
+    try {
+        console.log('Загружаем PowerPoint презентацию:', materialId);
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('❌ Токен не найден в localStorage');
+            throw new Error('Токен авторизации не найден');
+        }
+
+        const response = await fetch(`/api/materials/${materialId}/view`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки презентации');
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+
+        // PPTX - это ZIP-архив, используем JSZip для распаковки
+        const zip = await JSZip.loadAsync(arrayBuffer);
+
+        // Извлекаем все медиа-файлы (изображения)
+        const mediaFiles = {};
+        const mediaFolder = zip.folder('ppt/media');
+        if (mediaFolder) {
+            const mediaEntries = Object.keys(zip.files).filter(name => name.startsWith('ppt/media/'));
+            for (const mediaPath of mediaEntries) {
+                const file = zip.files[mediaPath];
+                if (!file.dir) {
+                    const blob = await file.async('blob');
+                    const url = URL.createObjectURL(blob);
+                    const fileName = mediaPath.split('/').pop();
+                    mediaFiles[fileName] = url;
+                }
+            }
+        }
+        console.log('Найдено медиа-файлов:', Object.keys(mediaFiles).length);
+
+        // Парсим relationships для каждого слайда
+        const slideRels = {};
+        const relsFiles = Object.keys(zip.files).filter(name => name.match(/ppt\/slides\/_rels\/slide\d+\.xml\.rels$/));
+        for (const relsPath of relsFiles) {
+            const slideNum = relsPath.match(/slide(\d+)/)[1];
+            const relsXml = await zip.files[relsPath].async('string');
+            slideRels[slideNum] = parseRelationships(relsXml, mediaFiles);
+        }
+
+        // Находим XML файлы слайдов
+        const slideFiles = Object.keys(zip.files)
+            .filter(name => name.match(/ppt\/slides\/slide\d+\.xml$/))
+            .sort((a, b) => {
+                const numA = parseInt(a.match(/slide(\d+)/)[1]);
+                const numB = parseInt(b.match(/slide(\d+)/)[1]);
+                return numA - numB;
+            });
+
+        console.log('Найдено слайдов:', slideFiles.length);
+
+        const container = document.getElementById('pptxContainer');
+
+        if (slideFiles.length === 0) {
+            throw new Error('Слайды не найдены в презентации');
+        }
+
+        let slidesHtml = `
+            <div class="pptx-header mb-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="text-white mb-0">
+                        <i class="bi bi-file-earmark-ppt me-2"></i>
+                        Презентация (${slideFiles.length} слайдов)
+                    </h5>
+                </div>
+            </div>
+            <div class="slides-container">
+        `;
+
+        // Извлекаем контент из каждого слайда
+        for (let i = 0; i < slideFiles.length; i++) {
+            const slideNum = (i + 1).toString();
+            const slideXml = await zip.files[slideFiles[i]].async('string');
+            const rels = slideRels[slideNum] || {};
+            const slideContent = extractSlideContent(slideXml, rels);
+
+            slidesHtml += `
+                <div class="slide-card mb-4">
+                    <div class="slide-header">
+                        <span class="slide-number">Слайд ${i + 1}</span>
+                    </div>
+                    <div class="slide-content">
+                        ${slideContent.images.length > 0 ? `<div class="slide-images">${slideContent.images.join('')}</div>` : ''}
+                        ${slideContent.text || '<p class="text-muted fst-italic">Текст отсутствует</p>'}
+                        ${slideContent.shapes.length > 0 ? `<div class="slide-shapes">${slideContent.shapes.join('')}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        slidesHtml += '</div>';
+
+        // Стили для презентации
+        const styles = `
+            <style>
+                .slides-container {
+                    max-height: calc(100vh - 150px);
+                    overflow-y: auto;
+                    padding-right: 10px;
+                }
+                .slide-card {
+                    background: white;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                }
+                .slide-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    padding: 12px 20px;
+                    color: white;
+                }
+                .slide-number {
+                    font-weight: 600;
+                    font-size: 14px;
+                }
+                .slide-content {
+                    padding: 30px;
+                    min-height: 200px;
+                    font-size: 16px;
+                    line-height: 1.8;
+                }
+                .slide-content h1, .slide-content h2 {
+                    color: #333;
+                    margin-bottom: 15px;
+                }
+                .slide-content p {
+                    margin-bottom: 10px;
+                    color: #555;
+                }
+                .slide-content ul {
+                    padding-left: 25px;
+                }
+                .slide-content li {
+                    margin-bottom: 8px;
+                }
+                .slide-images {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 20px;
+                    justify-content: center;
+                }
+                .slide-images img {
+                    max-width: 100%;
+                    max-height: 400px;
+                    object-fit: contain;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+                .slide-shapes {
+                    margin-top: 15px;
+                    padding: 10px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                }
+                .slide-shape {
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 8px 15px;
+                    margin: 5px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border-radius: 20px;
+                    font-size: 14px;
+                }
+                .slide-shape i {
+                    margin-right: 8px;
+                }
+                .slides-container::-webkit-scrollbar {
+                    width: 8px;
+                }
+                .slides-container::-webkit-scrollbar-track {
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 4px;
+                }
+                .slides-container::-webkit-scrollbar-thumb {
+                    background: rgba(255,255,255,0.3);
+                    border-radius: 4px;
+                }
+            </style>
+        `;
+
+        container.innerHTML = styles + slidesHtml;
+
+        console.log('Презентация отображена успешно');
+
+    } catch (error) {
+        console.error('Ошибка загрузки презентации:', error);
+        const container = document.getElementById('pptxContainer');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center p-4" style="background: white; border-radius: 8px;">
+                    <i class="bi bi-exclamation-triangle display-1 text-warning"></i>
+                    <h5 class="mt-3">Ошибка загрузки презентации</h5>
+                    <p class="text-muted">Не удалось загрузить PowerPoint документ</p>
+                    <p class="text-muted small">${error.message}</p>
+                </div>
+            `;
+        }
+    }
+}
+
+// Парсинг relationships файла слайда
+function parseRelationships(relsXml, mediaFiles) {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(relsXml, 'text/xml');
+    const relationships = {};
+
+    const relElements = xmlDoc.getElementsByTagName('Relationship');
+    for (let rel of relElements) {
+        const id = rel.getAttribute('Id');
+        const target = rel.getAttribute('Target');
+        const type = rel.getAttribute('Type');
+
+        if (target && target.includes('../media/')) {
+            const mediaName = target.split('/').pop();
+            if (mediaFiles[mediaName]) {
+                relationships[id] = {
+                    url: mediaFiles[mediaName],
+                    type: 'image'
+                };
+            }
+        }
+    }
+
+    return relationships;
+}
+
+// Извлечение контента слайда (текст, изображения, фигуры)
+function extractSlideContent(xmlString, relationships) {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+
+    const result = {
+        text: '',
+        images: [],
+        shapes: []
+    };
+
+    // Извлекаем изображения (blip elements)
+    const blipElements = xmlDoc.getElementsByTagName('a:blip');
+    for (let blip of blipElements) {
+        const embedId = blip.getAttribute('r:embed');
+        if (embedId && relationships[embedId]) {
+            result.images.push(`<img src="${relationships[embedId].url}" alt="Изображение слайда">`);
+        }
+    }
+
+    // Извлекаем фигуры (shapes)
+    const spElements = xmlDoc.getElementsByTagName('p:sp');
+    for (let sp of spElements) {
+        // Проверяем тип фигуры
+        const nvSpPr = sp.getElementsByTagName('p:nvSpPr')[0];
+        if (nvSpPr) {
+            const cNvSpPr = nvSpPr.getElementsByTagName('p:cNvSpPr')[0];
+            // Если это не текстовый блок, а фигура
+            if (cNvSpPr) {
+                const prstGeom = sp.getElementsByTagName('a:prstGeom')[0];
+                if (prstGeom) {
+                    const shapeType = prstGeom.getAttribute('prst');
+                    if (shapeType && !['rect', 'textBox'].includes(shapeType)) {
+                        const shapeName = getShapeName(shapeType);
+                        const shapeText = extractShapeText(sp);
+                        result.shapes.push(`<span class="slide-shape"><i class="bi bi-diagram-3"></i>${shapeName}${shapeText ? ': ' + shapeText : ''}</span>`);
+                    }
+                }
+            }
+        }
+    }
+
+    // Извлекаем текст
+    const paragraphs = [];
+    const pElements = xmlDoc.getElementsByTagName('a:p');
+
+    for (let p of pElements) {
+        const texts = p.getElementsByTagName('a:t');
+        let paragraphText = '';
+
+        for (let t of texts) {
+            paragraphText += t.textContent || '';
+        }
+
+        if (paragraphText.trim()) {
+            paragraphs.push(paragraphText.trim());
+        }
+    }
+
+    if (paragraphs.length > 0) {
+        result.text = `<h2>${escapeHtml(paragraphs[0])}</h2>`;
+
+        if (paragraphs.length > 1) {
+            result.text += '<ul>';
+            for (let i = 1; i < paragraphs.length; i++) {
+                result.text += `<li>${escapeHtml(paragraphs[i])}</li>`;
+            }
+            result.text += '</ul>';
+        }
+    }
+
+    return result;
+}
+
+// Извлечение текста из фигуры
+function extractShapeText(shapeElement) {
+    const texts = shapeElement.getElementsByTagName('a:t');
+    let text = '';
+    for (let t of texts) {
+        text += t.textContent || '';
+    }
+    return text.trim();
+}
+
+// Получение читаемого названия фигуры
+function getShapeName(shapeType) {
+    const shapeNames = {
+        'arrow': 'Стрелка',
+        'rightArrow': 'Стрелка вправо',
+        'leftArrow': 'Стрелка влево',
+        'upArrow': 'Стрелка вверх',
+        'downArrow': 'Стрелка вниз',
+        'leftRightArrow': 'Двойная стрелка',
+        'upDownArrow': 'Вертикальная стрелка',
+        'bentArrow': 'Изогнутая стрелка',
+        'curvedRightArrow': 'Изогнутая стрелка',
+        'curvedLeftArrow': 'Изогнутая стрелка',
+        'ellipse': 'Овал',
+        'triangle': 'Треугольник',
+        'rtTriangle': 'Прямоугольный треугольник',
+        'parallelogram': 'Параллелограмм',
+        'trapezoid': 'Трапеция',
+        'diamond': 'Ромб',
+        'pentagon': 'Пятиугольник',
+        'hexagon': 'Шестиугольник',
+        'heptagon': 'Семиугольник',
+        'octagon': 'Восьмиугольник',
+        'star4': 'Звезда (4)',
+        'star5': 'Звезда (5)',
+        'star6': 'Звезда (6)',
+        'star8': 'Звезда (8)',
+        'roundRect': 'Скруглённый прямоугольник',
+        'snip1Rect': 'Прямоугольник со срезом',
+        'snip2Rect': 'Прямоугольник с двумя срезами',
+        'cloud': 'Облако',
+        'heart': 'Сердце',
+        'lightningBolt': 'Молния',
+        'sun': 'Солнце',
+        'moon': 'Луна',
+        'smileyFace': 'Смайлик',
+        'line': 'Линия',
+        'straightConnector1': 'Соединительная линия',
+        'bentConnector3': 'Угловой соединитель',
+        'curvedConnector3': 'Изогнутый соединитель',
+        'callout1': 'Выноска',
+        'callout2': 'Выноска',
+        'callout3': 'Выноска',
+        'accentCallout1': 'Акцентная выноска',
+        'flowChartProcess': 'Блок процесса',
+        'flowChartDecision': 'Блок решения',
+        'flowChartTerminator': 'Блок терминатора',
+        'flowChartConnector': 'Соединитель',
+        'actionButtonBlank': 'Кнопка',
+        'mathPlus': 'Плюс',
+        'mathMinus': 'Минус',
+        'mathMultiply': 'Умножить',
+        'mathDivide': 'Разделить',
+        'mathEqual': 'Равно',
+        'mathNotEqual': 'Не равно',
+        'bracketPair': 'Скобки',
+        'bracePair': 'Фигурные скобки',
+        'chevron': 'Шеврон',
+        'homePlate': 'Пятиугольник',
+        'ribbon': 'Лента',
+        'ribbon2': 'Лента 2',
+        'wave': 'Волна',
+        'doubleWave': 'Двойная волна'
+    };
+
+    return shapeNames[shapeType] || `Фигура (${shapeType})`;
+}
+
+// Экранирование HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Загрузка старого формата Word (.doc)
+async function loadDOCDocument(materialId) {
+    try {
+        console.log('Загружаем DOC документ:', materialId);
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('❌ Токен не найден в localStorage');
+            throw new Error('Токен авторизации не найден');
+        }
+
+        const response = await fetch(`/api/materials/${materialId}/view`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки документа');
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+
+        // Пробуем использовать mammoth.js (работает только для .docx, но попробуем)
+        try {
+            const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+
+            if (result.value && result.value.trim()) {
+                const container = document.getElementById('docContainer');
+                container.innerHTML = `
+                    <div style="line-height: 1.8; font-family: 'Times New Roman', serif; font-size: 16px; color: #333;">
+                        ${result.value}
+                    </div>
+                `;
+
+                if (result.messages.length > 0) {
+                    console.warn('Предупреждения при конвертации DOC:', result.messages);
+                }
+
+                console.log('DOC документ загружен через mammoth');
+                return;
+            }
+        } catch (mammothError) {
+            console.log('Mammoth не смог обработать .doc файл:', mammothError.message);
+        }
+
+        // Если mammoth не сработал, показываем сообщение
+        const container = document.getElementById('docContainer');
+        container.innerHTML = `
+            <div class="text-center p-4">
+                <i class="bi bi-file-earmark-word display-1 text-primary"></i>
+                <h5 class="mt-3">Формат .doc не поддерживается для просмотра</h5>
+                <p class="text-muted">Старый формат Microsoft Word 97-2003 (.doc) не может быть отображён в браузере.</p>
+                <p class="text-muted">Пожалуйста, скачайте файл и откройте его в Microsoft Word или LibreOffice.</p>
+                <button class="btn btn-primary mt-3" onclick="downloadMaterial(${materialId})">
+                    <i class="bi bi-download me-2"></i>Скачать документ
+                </button>
+            </div>
+        `;
+
+    } catch (error) {
+        console.error('Ошибка загрузки DOC:', error);
+        const container = document.getElementById('docContainer');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center p-4">
+                    <i class="bi bi-exclamation-triangle display-1 text-warning"></i>
+                    <h5 class="mt-3">Ошибка загрузки документа</h5>
+                    <p class="text-muted">Не удалось загрузить документ</p>
+                    <p class="text-muted small">${error.message}</p>
                 </div>
             `;
         }
