@@ -41,7 +41,9 @@ const fileFilter = (req, file, cb) => {
         'application/vnd.oasis.opendocument.text',
         'application/vnd.oasis.opendocument.spreadsheet',
         'application/vnd.oasis.opendocument.presentation',
-        'text/plain'
+        'text/plain',
+        'application/rtf',
+        'text/rtf'
     ];
 
     if (allowedMimes.includes(file.mimetype)) {

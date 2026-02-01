@@ -721,6 +721,8 @@ function showMaterialModal(material) {
             material.originalName?.toLowerCase().endsWith('.xlsx') || material.originalName?.toLowerCase().endsWith('.xls');
         const isPPTX = material.mimeType.includes('presentation') || material.mimeType.includes('powerpoint') ||
             material.originalName?.toLowerCase().endsWith('.pptx') || material.originalName?.toLowerCase().endsWith('.ppt');
+        const isRTF = material.mimeType === 'application/rtf' || material.mimeType === 'text/rtf' ||
+            material.originalName?.toLowerCase().endsWith('.rtf');
         const isODF = material.mimeType.includes('opendocument') ||
             material.originalName?.toLowerCase().endsWith('.odt') ||
             material.originalName?.toLowerCase().endsWith('.ods') ||
@@ -821,6 +823,22 @@ function showMaterialModal(material) {
                                     <span class="visually-hidden">Загрузка презентации...</span>
                                 </div>
                                 <div class="mt-3 text-white">Загрузка презентации...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (isRTF) {
+            // RTF документы
+            bodyContent = `
+                <div class="fullscreen-document-viewer">
+                    <div class="document-content">
+                        <div id="rtfContainer" style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; min-height: calc(100vh - 40px); box-shadow: 0 0 20px rgba(0,0,0,0.1);">
+                            <div class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Загрузка документа...</span>
+                                </div>
+                                <div class="mt-3">Загрузка документа...</div>
                             </div>
                         </div>
                     </div>
@@ -1293,7 +1311,9 @@ async function loadDocumentContent(material) {
         material.originalName?.toLowerCase().endsWith('.xlsx') || material.originalName?.toLowerCase().endsWith('.xls');
     const isPPTX = material.mimeType.includes('presentation') || material.mimeType.includes('powerpoint') ||
         material.originalName?.toLowerCase().endsWith('.pptx') || material.originalName?.toLowerCase().endsWith('.ppt');
-    const isText = material.mimeType.includes('text/') || material.originalName?.toLowerCase().endsWith('.txt');
+    const isRTF = material.mimeType === 'application/rtf' || material.mimeType === 'text/rtf' ||
+        material.originalName?.toLowerCase().endsWith('.rtf');
+    const isText = (material.mimeType.includes('text/') && !isRTF) || material.originalName?.toLowerCase().endsWith('.txt');
 
     if (isPDF) {
         await loadPDFDocument(material.id);
@@ -1305,6 +1325,8 @@ async function loadDocumentContent(material) {
         await loadXLSXDocument(material.id);
     } else if (isPPTX) {
         await loadPPTXDocument(material.id);
+    } else if (isRTF) {
+        await loadRTFDocument(material.id);
     } else if (isText) {
         await loadTextDocument(material.id);
     }
@@ -2094,6 +2116,217 @@ async function loadDOCDocument(materialId) {
             `;
         }
     }
+}
+
+// Загрузка RTF документа
+async function loadRTFDocument(materialId) {
+    try {
+        console.log('Загружаем RTF документ:', materialId);
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('❌ Токен не найден в localStorage');
+            throw new Error('Токен авторизации не найден');
+        }
+
+        const response = await fetch(`/api/materials/${materialId}/view`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки RTF документа');
+        }
+
+        const rtfContent = await response.text();
+        const container = document.getElementById('rtfContainer');
+
+        // Конвертируем RTF в HTML
+        const htmlContent = convertRTFtoHTML(rtfContent);
+
+        container.innerHTML = `
+            <div style="line-height: 1.8; font-family: 'Times New Roman', serif; font-size: 16px; color: #333;">
+                ${htmlContent}
+            </div>
+        `;
+
+        console.log('RTF документ загружен успешно');
+
+    } catch (error) {
+        console.error('Ошибка загрузки RTF:', error);
+        const container = document.getElementById('rtfContainer');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center p-4">
+                    <i class="bi bi-exclamation-triangle display-1 text-warning"></i>
+                    <h5 class="mt-3">Ошибка загрузки документа</h5>
+                    <p class="text-muted">Не удалось загрузить RTF документ</p>
+                    <p class="text-muted small">${error.message}</p>
+                    <button class="btn btn-primary mt-3" onclick="downloadMaterial(${materialId})">
+                        <i class="bi bi-download me-2"></i>Скачать документ
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+// Базовый конвертер RTF в HTML
+function convertRTFtoHTML(rtf) {
+    // Проверяем, что это RTF
+    if (!rtf.startsWith('{\\rtf')) {
+        return `<pre>${escapeHtml(rtf)}</pre>`;
+    }
+
+    let html = '';
+    let text = '';
+    let inGroup = 0;
+    let skipGroup = 0;
+    let bold = false;
+    let italic = false;
+    let underline = false;
+
+    // Убираем заголовок RTF и служебные группы
+    let i = 0;
+    while (i < rtf.length) {
+        const char = rtf[i];
+
+        if (char === '{') {
+            inGroup++;
+            // Проверяем на служебные группы, которые нужно пропустить
+            const nextChars = rtf.substring(i + 1, i + 20);
+            if (nextChars.startsWith('\\fonttbl') ||
+                nextChars.startsWith('\\colortbl') ||
+                nextChars.startsWith('\\stylesheet') ||
+                nextChars.startsWith('\\info') ||
+                nextChars.startsWith('\\*\\') ||
+                nextChars.startsWith('\\pict')) {
+                skipGroup = inGroup;
+            }
+            i++;
+            continue;
+        }
+
+        if (char === '}') {
+            if (skipGroup === inGroup) {
+                skipGroup = 0;
+            }
+            inGroup--;
+            i++;
+            continue;
+        }
+
+        if (skipGroup > 0) {
+            i++;
+            continue;
+        }
+
+        if (char === '\\') {
+            // Управляющее слово
+            let word = '';
+            i++;
+            while (i < rtf.length && /[a-z-]/.test(rtf[i])) {
+                word += rtf[i];
+                i++;
+            }
+
+            // Числовой параметр
+            let param = '';
+            while (i < rtf.length && /[0-9-]/.test(rtf[i])) {
+                param += rtf[i];
+                i++;
+            }
+
+            // Пробел после управляющего слова
+            if (rtf[i] === ' ') {
+                i++;
+            }
+
+            // Обрабатываем управляющие слова
+            switch (word) {
+                case 'par':
+                case 'line':
+                    text += '<br>';
+                    break;
+                case 'tab':
+                    text += '&emsp;';
+                    break;
+                case 'b':
+                    if (param === '0') {
+                        if (bold) { text += '</b>'; bold = false; }
+                    } else {
+                        if (!bold) { text += '<b>'; bold = true; }
+                    }
+                    break;
+                case 'i':
+                    if (param === '0') {
+                        if (italic) { text += '</i>'; italic = false; }
+                    } else {
+                        if (!italic) { text += '<i>'; italic = true; }
+                    }
+                    break;
+                case 'ul':
+                    if (!underline) { text += '<u>'; underline = true; }
+                    break;
+                case 'ulnone':
+                    if (underline) { text += '</u>'; underline = false; }
+                    break;
+                case 'u':
+                    // Unicode символ
+                    if (param) {
+                        const code = parseInt(param);
+                        if (code < 0) {
+                            text += String.fromCharCode(code + 65536);
+                        } else {
+                            text += String.fromCharCode(code);
+                        }
+                        // Пропускаем заменяющий символ
+                        if (rtf[i] === '?') i++;
+                    }
+                    break;
+                case '':
+                    // Экранированные символы
+                    if (rtf[i - 1] === '\\') {
+                        text += '\\';
+                    }
+                    break;
+            }
+
+            // Специальные экранированные символы
+            if (rtf[i - word.length - param.length - 1] === '\\') {
+                const escaped = rtf[i - word.length - param.length];
+                if (escaped === '{' || escaped === '}' || escaped === '\\') {
+                    // Уже обработано выше
+                }
+            }
+
+            continue;
+        }
+
+        // Обычный текст
+        if (char === '\r' || char === '\n') {
+            i++;
+            continue;
+        }
+
+        text += escapeHtml(char);
+        i++;
+    }
+
+    // Закрываем незакрытые теги
+    if (bold) text += '</b>';
+    if (italic) text += '</i>';
+    if (underline) text += '</u>';
+
+    // Разбиваем на параграфы
+    html = text.split('<br><br>').map(p => p.trim()).filter(p => p).map(p => `<p>${p}</p>`).join('');
+
+    if (!html) {
+        html = `<p>${text}</p>`;
+    }
+
+    return html || '<p class="text-muted fst-italic">Документ пуст или не удалось извлечь текст</p>';
 }
 
 // Функции для управления PDF
