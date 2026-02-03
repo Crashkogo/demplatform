@@ -714,21 +714,39 @@ function showMaterialModal(material) {
         `;
     } else if (material.fileType === 'document') {
         // Полноэкранный просмотрщик документов
-        const isPDF = material.mimeType === 'application/pdf';
-        const isDOCX = material.mimeType.includes('wordprocessingml') || material.originalName?.toLowerCase().endsWith('.docx');
-        const isDOC = material.mimeType === 'application/msword' || material.originalName?.toLowerCase().endsWith('.doc');
-        const isXLSX = material.mimeType.includes('spreadsheet') || material.mimeType.includes('excel') ||
-            material.originalName?.toLowerCase().endsWith('.xlsx') || material.originalName?.toLowerCase().endsWith('.xls');
-        const isPPTX = material.mimeType.includes('presentation') || material.mimeType.includes('powerpoint') ||
-            material.originalName?.toLowerCase().endsWith('.pptx') || material.originalName?.toLowerCase().endsWith('.ppt');
-        const isRTF = material.mimeType === 'application/rtf' || material.mimeType === 'text/rtf' ||
-            material.originalName?.toLowerCase().endsWith('.rtf');
-        const isODF = material.mimeType.includes('opendocument') ||
-            material.originalName?.toLowerCase().endsWith('.odt') ||
-            material.originalName?.toLowerCase().endsWith('.ods') ||
-            material.originalName?.toLowerCase().endsWith('.odp');
+        const fileName = material.originalName?.toLowerCase() || '';
 
-        if (isPDF) {
+        // RTF проверяем первым по расширению (важно! т.к. может быть неправильный mimeType)
+        const isRTF = fileName.endsWith('.rtf') ||
+            material.mimeType === 'application/rtf' || material.mimeType === 'text/rtf';
+
+        const isPDF = material.mimeType === 'application/pdf' || fileName.endsWith('.pdf');
+        const isDOCX = material.mimeType.includes('wordprocessingml') || fileName.endsWith('.docx');
+        const isDOC = (material.mimeType === 'application/msword' || fileName.endsWith('.doc')) && !isRTF;
+        const isXLSX = material.mimeType.includes('spreadsheet') || material.mimeType.includes('excel') ||
+            fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+        const isPPTX = material.mimeType.includes('presentation') || material.mimeType.includes('powerpoint') ||
+            fileName.endsWith('.pptx') || fileName.endsWith('.ppt');
+        const isODF = material.mimeType.includes('opendocument') ||
+            fileName.endsWith('.odt') || fileName.endsWith('.ods') || fileName.endsWith('.odp');
+
+        if (isRTF) {
+            // RTF документы - проверяем первыми!
+            bodyContent = `
+                <div class="fullscreen-document-viewer">
+                    <div class="document-content">
+                        <div id="rtfContainer" style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; min-height: calc(100vh - 40px); box-shadow: 0 0 20px rgba(0,0,0,0.1);">
+                            <div class="text-center">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Загрузка документа...</span>
+                                </div>
+                                <div class="mt-3">Загрузка документа...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (isPDF) {
             // Полноэкранный PDF просмотрщик
             bodyContent = `
                 <div class="fullscreen-document-viewer">
@@ -823,22 +841,6 @@ function showMaterialModal(material) {
                                     <span class="visually-hidden">Загрузка презентации...</span>
                                 </div>
                                 <div class="mt-3 text-white">Загрузка презентации...</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        } else if (isRTF) {
-            // RTF документы
-            bodyContent = `
-                <div class="fullscreen-document-viewer">
-                    <div class="document-content">
-                        <div id="rtfContainer" style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; min-height: calc(100vh - 40px); box-shadow: 0 0 20px rgba(0,0,0,0.1);">
-                            <div class="text-center">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Загрузка документа...</span>
-                                </div>
-                                <div class="mt-3">Загрузка документа...</div>
                             </div>
                         </div>
                     </div>
@@ -1304,18 +1306,25 @@ async function loadImageContent(materialId) {
 
 // Загрузка контента документа
 async function loadDocumentContent(material) {
-    const isPDF = material.mimeType === 'application/pdf';
-    const isDOCX = material.mimeType.includes('wordprocessingml') || material.originalName?.toLowerCase().endsWith('.docx');
-    const isDOC = material.mimeType === 'application/msword' || material.originalName?.toLowerCase().endsWith('.doc');
-    const isXLSX = material.mimeType.includes('spreadsheet') || material.mimeType.includes('excel') ||
-        material.originalName?.toLowerCase().endsWith('.xlsx') || material.originalName?.toLowerCase().endsWith('.xls');
-    const isPPTX = material.mimeType.includes('presentation') || material.mimeType.includes('powerpoint') ||
-        material.originalName?.toLowerCase().endsWith('.pptx') || material.originalName?.toLowerCase().endsWith('.ppt');
-    const isRTF = material.mimeType === 'application/rtf' || material.mimeType === 'text/rtf' ||
-        material.originalName?.toLowerCase().endsWith('.rtf');
-    const isText = (material.mimeType.includes('text/') && !isRTF) || material.originalName?.toLowerCase().endsWith('.txt');
+    const fileName = material.originalName?.toLowerCase() || '';
 
-    if (isPDF) {
+    // RTF проверяем первым по расширению (важно! т.к. может быть неправильный mimeType)
+    const isRTF = fileName.endsWith('.rtf') ||
+        material.mimeType === 'application/rtf' || material.mimeType === 'text/rtf';
+
+    const isPDF = material.mimeType === 'application/pdf' || fileName.endsWith('.pdf');
+    const isDOCX = material.mimeType.includes('wordprocessingml') || fileName.endsWith('.docx');
+    const isDOC = (material.mimeType === 'application/msword' || fileName.endsWith('.doc')) && !isRTF;
+    const isXLSX = material.mimeType.includes('spreadsheet') || material.mimeType.includes('excel') ||
+        fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+    const isPPTX = material.mimeType.includes('presentation') || material.mimeType.includes('powerpoint') ||
+        fileName.endsWith('.pptx') || fileName.endsWith('.ppt');
+    const isText = (material.mimeType.includes('text/') && !isRTF) || fileName.endsWith('.txt');
+
+    // RTF проверяем первым!
+    if (isRTF) {
+        await loadRTFDocument(material.id);
+    } else if (isPDF) {
         await loadPDFDocument(material.id);
     } else if (isDOCX) {
         await loadDOCXDocument(material.id);
@@ -2118,10 +2127,10 @@ async function loadDOCDocument(materialId) {
     }
 }
 
-// Загрузка RTF документа
+// Загрузка RTF документа с использованием rtf.js
 async function loadRTFDocument(materialId) {
     try {
-        console.log('Загружаем RTF документ:', materialId);
+        console.log('Загружаем RTF документ через серверную конвертацию в PDF:', materialId);
 
         const token = localStorage.getItem('token');
         if (!token) {
@@ -2129,40 +2138,90 @@ async function loadRTFDocument(materialId) {
             throw new Error('Токен авторизации не найден');
         }
 
-        const response = await fetch(`/api/materials/${materialId}/view`, {
+        // Показываем индикатор загрузки
+        const container = document.getElementById('rtfContainer');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center p-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Конвертация RTF в PDF...</p>
+                </div>
+            `;
+        }
+
+        // Запрашиваем конвертированный PDF с сервера
+        const response = await fetch(`/api/materials/${materialId}/preview-pdf`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
 
         if (!response.ok) {
-            throw new Error('Ошибка загрузки RTF документа');
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Ошибка конвертации RTF в PDF');
         }
 
-        const rtfContent = await response.text();
-        const container = document.getElementById('rtfContainer');
+        const pdfData = await response.arrayBuffer();
 
-        // Конвертируем RTF в HTML
-        const htmlContent = convertRTFtoHTML(rtfContent);
+        // Используем существующую функцию рендеринга PDF
+        // Но для RTF нам нужно отрендерить в rtfContainer
+        if (typeof pdfjsLib === 'undefined') {
+            throw new Error('PDF.js не загружен');
+        }
 
+        const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+        const pdf = await loadingTask.promise;
+
+        console.log(`RTF конвертирован в PDF, страниц: ${pdf.numPages}`);
+
+        // Очищаем контейнер и создаём структуру для PDF
         container.innerHTML = `
-            <div style="line-height: 1.8; font-family: 'Times New Roman', serif; font-size: 16px; color: #333;">
-                ${htmlContent}
+            <div id="rtfPdfViewer" style="width: 100%; overflow: auto; max-height: 70vh;">
+                <div id="rtfPdfPages"></div>
             </div>
         `;
 
-        console.log('RTF документ загружен успешно');
+        const pagesContainer = document.getElementById('rtfPdfPages');
+
+        // Рендерим все страницы
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const scale = 1.5;
+            const viewport = page.getViewport({ scale });
+
+            const canvas = document.createElement('canvas');
+            canvas.className = 'pdf-page mb-3';
+            canvas.style.display = 'block';
+            canvas.style.margin = '0 auto 20px auto';
+            canvas.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            await page.render({
+                canvasContext: context,
+                viewport: viewport
+            }).promise;
+
+            pagesContainer.appendChild(canvas);
+        }
+
+        console.log('RTF документ успешно отображён как PDF');
 
     } catch (error) {
         console.error('Ошибка загрузки RTF:', error);
+
         const container = document.getElementById('rtfContainer');
         if (container) {
             container.innerHTML = `
                 <div class="text-center p-4">
-                    <i class="bi bi-exclamation-triangle display-1 text-warning"></i>
-                    <h5 class="mt-3">Ошибка загрузки документа</h5>
-                    <p class="text-muted">Не удалось загрузить RTF документ</p>
-                    <p class="text-muted small">${error.message}</p>
+                    <i class="bi bi-file-earmark-text display-1 text-warning"></i>
+                    <h5 class="mt-3">Не удалось отобразить RTF документ</h5>
+                    <p class="text-muted">${escapeHtml(error.message)}</p>
+                    <p class="text-muted">Пожалуйста, скачайте файл и откройте его в Microsoft Word или LibreOffice.</p>
                     <button class="btn btn-primary mt-3" onclick="downloadMaterial(${materialId})">
                         <i class="bi bi-download me-2"></i>Скачать документ
                     </button>
@@ -2172,161 +2231,81 @@ async function loadRTFDocument(materialId) {
     }
 }
 
-// Базовый конвертер RTF в HTML
-function convertRTFtoHTML(rtf) {
-    // Проверяем, что это RTF
-    if (!rtf.startsWith('{\\rtf')) {
-        return `<pre>${escapeHtml(rtf)}</pre>`;
+// Fallback парсер RTF (базовый)
+async function loadRTFDocumentFallback(materialId) {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`/api/materials/${materialId}/view`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error('Ошибка загрузки');
     }
 
-    let html = '';
-    let text = '';
-    let inGroup = 0;
-    let skipGroup = 0;
-    let bold = false;
-    let italic = false;
-    let underline = false;
+    // Получаем как ArrayBuffer для правильной работы с кодировкой
+    const arrayBuffer = await response.arrayBuffer();
 
-    // Убираем заголовок RTF и служебные группы
-    let i = 0;
-    while (i < rtf.length) {
-        const char = rtf[i];
+    // Декодируем как Windows-1251 (кириллица)
+    let rtfContent;
+    try {
+        rtfContent = new TextDecoder('windows-1251').decode(arrayBuffer);
+    } catch (e) {
+        rtfContent = new TextDecoder('utf-8').decode(arrayBuffer);
+    }
+    const container = document.getElementById('rtfContainer');
 
-        if (char === '{') {
-            inGroup++;
-            // Проверяем на служебные группы, которые нужно пропустить
-            const nextChars = rtf.substring(i + 1, i + 20);
-            if (nextChars.startsWith('\\fonttbl') ||
-                nextChars.startsWith('\\colortbl') ||
-                nextChars.startsWith('\\stylesheet') ||
-                nextChars.startsWith('\\info') ||
-                nextChars.startsWith('\\*\\') ||
-                nextChars.startsWith('\\pict')) {
-                skipGroup = inGroup;
-            }
-            i++;
-            continue;
-        }
+    // Базовое извлечение текста из RTF
+    let text = rtfContent;
 
-        if (char === '}') {
-            if (skipGroup === inGroup) {
-                skipGroup = 0;
-            }
-            inGroup--;
-            i++;
-            continue;
-        }
+    // Удаляем RTF заголовок и служебные блоки
+    text = text.replace(/\{\\rtf1[^}]*\}/g, '');
+    text = text.replace(/\{\\fonttbl[^}]*\}/g, '');
+    text = text.replace(/\{\\colortbl[^}]*\}/g, '');
+    text = text.replace(/\{\\stylesheet[^}]*\}/g, '');
+    text = text.replace(/\{\\info[^}]*\}/g, '');
+    text = text.replace(/\{\\\*\\[^}]*\}/g, '');
 
-        if (skipGroup > 0) {
-            i++;
-            continue;
-        }
+    // Обрабатываем Unicode
+    text = text.replace(/\\u(\d+)\?/g, (match, code) => {
+        return String.fromCharCode(parseInt(code));
+    });
+    text = text.replace(/\\u(-?\d+) ?/g, (match, code) => {
+        const num = parseInt(code);
+        return String.fromCharCode(num < 0 ? num + 65536 : num);
+    });
 
-        if (char === '\\') {
-            // Управляющее слово
-            let word = '';
-            i++;
-            while (i < rtf.length && /[a-z-]/.test(rtf[i])) {
-                word += rtf[i];
-                i++;
-            }
+    // Заменяем управляющие символы
+    text = text.replace(/\\par\b/g, '\n\n');
+    text = text.replace(/\\line\b/g, '\n');
+    text = text.replace(/\\tab\b/g, '\t');
+    text = text.replace(/\\'([0-9a-fA-F]{2})/g, (match, hex) => {
+        return String.fromCharCode(parseInt(hex, 16));
+    });
 
-            // Числовой параметр
-            let param = '';
-            while (i < rtf.length && /[0-9-]/.test(rtf[i])) {
-                param += rtf[i];
-                i++;
-            }
+    // Удаляем остальные управляющие слова
+    text = text.replace(/\\[a-z]+\d* ?/gi, '');
+    text = text.replace(/[{}]/g, '');
 
-            // Пробел после управляющего слова
-            if (rtf[i] === ' ') {
-                i++;
-            }
+    // Очищаем
+    text = text.trim();
 
-            // Обрабатываем управляющие слова
-            switch (word) {
-                case 'par':
-                case 'line':
-                    text += '<br>';
-                    break;
-                case 'tab':
-                    text += '&emsp;';
-                    break;
-                case 'b':
-                    if (param === '0') {
-                        if (bold) { text += '</b>'; bold = false; }
-                    } else {
-                        if (!bold) { text += '<b>'; bold = true; }
-                    }
-                    break;
-                case 'i':
-                    if (param === '0') {
-                        if (italic) { text += '</i>'; italic = false; }
-                    } else {
-                        if (!italic) { text += '<i>'; italic = true; }
-                    }
-                    break;
-                case 'ul':
-                    if (!underline) { text += '<u>'; underline = true; }
-                    break;
-                case 'ulnone':
-                    if (underline) { text += '</u>'; underline = false; }
-                    break;
-                case 'u':
-                    // Unicode символ
-                    if (param) {
-                        const code = parseInt(param);
-                        if (code < 0) {
-                            text += String.fromCharCode(code + 65536);
-                        } else {
-                            text += String.fromCharCode(code);
-                        }
-                        // Пропускаем заменяющий символ
-                        if (rtf[i] === '?') i++;
-                    }
-                    break;
-                case '':
-                    // Экранированные символы
-                    if (rtf[i - 1] === '\\') {
-                        text += '\\';
-                    }
-                    break;
-            }
-
-            // Специальные экранированные символы
-            if (rtf[i - word.length - param.length - 1] === '\\') {
-                const escaped = rtf[i - word.length - param.length];
-                if (escaped === '{' || escaped === '}' || escaped === '\\') {
-                    // Уже обработано выше
-                }
-            }
-
-            continue;
-        }
-
-        // Обычный текст
-        if (char === '\r' || char === '\n') {
-            i++;
-            continue;
-        }
-
-        text += escapeHtml(char);
-        i++;
+    if (!text) {
+        throw new Error('Не удалось извлечь текст');
     }
 
-    // Закрываем незакрытые теги
-    if (bold) text += '</b>';
-    if (italic) text += '</i>';
-    if (underline) text += '</u>';
+    // Форматируем в HTML
+    const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+    const html = paragraphs.map(p => `<p>${escapeHtml(p.trim()).replace(/\n/g, '<br>')}</p>`).join('');
 
-    // Разбиваем на параграфы
-    html = text.split('<br><br>').map(p => p.trim()).filter(p => p).map(p => `<p>${p}</p>`).join('');
+    container.innerHTML = `
+        <div style="line-height: 1.8; font-family: 'Times New Roman', serif; font-size: 16px; color: #333;">
+            ${html}
+        </div>
+    `;
 
-    if (!html) {
-        html = `<p>${text}</p>`;
-    }
-
-    return html || '<p class="text-muted fst-italic">Документ пуст или не удалось извлечь текст</p>';
+    console.log('RTF загружен через fallback парсер');
 }
 
 // Функции для управления PDF

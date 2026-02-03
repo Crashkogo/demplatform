@@ -7,6 +7,7 @@ const { authenticateToken } = require('../middleware/auth');
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
 const { handleUpload, deleteFile } = require('../middleware/upload');
 const { logEvent } = require('../services/auditService');
+const convertService = require('../services/convertService');
 
 const router = express.Router();
 
@@ -272,6 +273,102 @@ router.get('/:id/view', [authenticateToken, addAccessibleCategories], async (req
         res.status(500).json({
             success: false,
             message: 'Ошибка просмотра материала'
+        });
+    }
+});
+
+// GET /api/materials/:id/preview-pdf - Конвертация RTF в PDF для просмотра
+router.get('/:id/preview-pdf', [authenticateToken, addAccessibleCategories], async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const material = await Material.findByPk(id);
+        if (!material) {
+            return res.status(404).json({
+                success: false,
+                message: 'Материал не найден'
+            });
+        }
+
+        // Проверяем права доступа
+        const user = req.user;
+        const role = user.roleData;
+
+        if (!role) {
+            return res.status(403).json({
+                success: false,
+                message: 'Роль пользователя не найдена'
+            });
+        }
+
+        if (role.isAdmin || role.canManageAllCategories) {
+            // Администратор - доступ разрешен
+        } else if (!role.canViewMaterials) {
+            return res.status(403).json({
+                success: false,
+                message: 'Доступ запрещен: нет права на просмотр материалов'
+            });
+        } else if (req.accessibleCategories !== 'all') {
+            if (!req.accessibleCategories.includes(material.categoryId)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Доступ к просмотру материала запрещен'
+                });
+            }
+        }
+
+        // Проверяем, что это RTF файл
+        const fileName = material.originalName?.toLowerCase() || '';
+        const isRTF = fileName.endsWith('.rtf') ||
+            material.mimeType === 'application/rtf' ||
+            material.mimeType === 'text/rtf';
+
+        if (!isRTF) {
+            return res.status(400).json({
+                success: false,
+                message: 'Этот маршрут только для RTF файлов'
+            });
+        }
+
+        const filePath = path.resolve(material.filePath);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({
+                success: false,
+                message: 'Файл не найден'
+            });
+        }
+
+        // Проверяем доступность LibreOffice
+        const isLibreOfficeAvailable = await convertService.isLibreOfficeInstalled();
+        if (!isLibreOfficeAvailable) {
+            return res.status(503).json({
+                success: false,
+                message: 'LibreOffice не установлен на сервере. Установите LibreOffice для конвертации RTF.'
+            });
+        }
+
+        console.log('Начинаем конвертацию RTF в PDF:', filePath);
+
+        // Конвертируем RTF в PDF
+        const pdfBuffer = await convertService.convertRTFtoPDF(filePath);
+
+        // Увеличиваем счетчик просмотров
+        material.incrementView().catch(err =>
+            console.error('Error incrementing view count:', err)
+        );
+
+        // Отправляем PDF
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${material.originalName.replace(/\.rtf$/i, '.pdf')}"`);
+        res.setHeader('Content-Length', pdfBuffer.length);
+        res.send(pdfBuffer);
+
+    } catch (error) {
+        console.error('RTF to PDF conversion error:', error);
+        res.status(500).json({
+            success: false,
+            message: `Ошибка конвертации: ${error.message}`
         });
     }
 });
