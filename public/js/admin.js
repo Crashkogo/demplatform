@@ -1378,7 +1378,7 @@ function initializeDropzone() {
             uploadMultiple: false,
             maxFiles: 1,
             maxFilesize: 500,
-            acceptedFiles: 'video/*,image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.txt',
+            acceptedFiles: 'video/*,image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.txt,.rtf',
             addRemoveLinks: true,
             clickable: true,
             createImageThumbnails: false, // Отключаем миниатюры для производительности

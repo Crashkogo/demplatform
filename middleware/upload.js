@@ -43,8 +43,17 @@ const fileFilter = (req, file, cb) => {
         'application/vnd.oasis.opendocument.presentation',
         'text/plain',
         'application/rtf',
-        'text/rtf'
+        'text/rtf',
+        'text/richtext',
+        'application/x-rtf'
     ];
+
+    // Дополнительная проверка по расширению файла для RTF
+    const ext = file.originalname.toLowerCase().split('.').pop();
+    if (ext === 'rtf') {
+        console.log('RTF файл определён по расширению, MIME:', file.mimetype);
+        return cb(null, true);
+    }
 
     if (allowedMimes.includes(file.mimetype)) {
         cb(null, true);
