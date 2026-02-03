@@ -899,7 +899,12 @@ function showMaterialModal(material) {
     modal.show();
 
     // Загружаем контент после показа модального окна
-    if (material.fileType === 'document') {
+    // Проверяем RTF отдельно, т.к. у старых файлов может быть fileType='other'
+    const isRTFFile = material.originalName?.toLowerCase().endsWith('.rtf') ||
+        material.mimeType === 'application/rtf' ||
+        material.mimeType === 'text/rtf';
+
+    if (material.fileType === 'document' || isRTFFile) {
         loadDocumentContent(material);
     } else if (material.fileType === 'image') {
         loadImageContent(material.id);
