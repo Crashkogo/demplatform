@@ -79,7 +79,8 @@ function determineFileType(mimeType) {
         mimeType.includes('odt') ||
         mimeType.includes('ods') ||
         mimeType.includes('odp') ||
-        mimeType.includes('text/')
+        mimeType.includes('text/') ||
+        mimeType.includes('rtf')
     ) {
         return 'document';
     } else {

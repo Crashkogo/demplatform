@@ -712,7 +712,10 @@ function showMaterialModal(material) {
                 </div>
             </div>
         `;
-    } else if (material.fileType === 'document') {
+    } else if (material.fileType === 'document' ||
+               material.mimeType === 'application/rtf' ||
+               material.mimeType === 'text/rtf' ||
+               material.originalName?.toLowerCase().endsWith('.rtf')) {
         // Полноэкранный просмотрщик документов
         const fileName = material.originalName?.toLowerCase() || '';
 
