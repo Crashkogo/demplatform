@@ -213,7 +213,7 @@ function initializeEventListeners() {
     const fileTypeFilter = document.getElementById('fileTypeFilter');
     if (fileTypeFilter) {
         fileTypeFilter.addEventListener('change', function () {
-            performSearch();
+            loadMaterials();
         });
     }
 
@@ -221,7 +221,9 @@ function initializeEventListeners() {
     const fileTypeFilterMobile = document.getElementById('fileTypeFilterMobile');
     if (fileTypeFilterMobile) {
         fileTypeFilterMobile.addEventListener('change', function () {
-            performSearchMobile();
+            const desktopFilter = document.getElementById('fileTypeFilter');
+            if (desktopFilter) desktopFilter.value = this.value;
+            loadMaterials();
         });
     }
 
