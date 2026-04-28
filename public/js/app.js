@@ -237,6 +237,23 @@ function initializeEventListeners() {
         loadMoreMaterials();
     });
 
+    // Делегирование событий для динамических кнопок
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const id = btn.dataset.id ? parseInt(btn.dataset.id) : null;
+        const value = btn.dataset.value || null;
+        switch (action) {
+            case 'view-material':           viewMaterial(id); break;
+            case 'download-material':       downloadMaterial(id); break;
+            case 'close-pdf-viewer':        closePDFViewer(); break;
+            case 'zoom-pdf':                zoomPDF(value); break;
+            case 'select-category':         selectCategory(value); break;
+            case 'select-category-by-name': selectCategoryByName(value); break;
+        }
+    });
+
     // Мобильная кнопка раскрытия категорий
     const mobileCategoryToggle = document.getElementById('mobileCategoryToggle');
     if (mobileCategoryToggle) {
@@ -416,13 +433,13 @@ function updateBreadcrumb(categoryId) {
         const node = tree.get_node(categoryId);
         const path = tree.get_path(node, false, true);
 
-        let breadcrumbHtml = '<li class="breadcrumb-item"><a href="#" onclick="selectCategory(\'all\')">Все материалы</a></li>';
+        let breadcrumbHtml = '<li class="breadcrumb-item"><a href="#" data-action="select-category" data-value="all">Все материалы</a></li>';
 
         path.forEach((nodeName, index) => {
             if (index === path.length - 1) {
                 breadcrumbHtml += `<li class="breadcrumb-item active">${nodeName}</li>`;
             } else {
-                breadcrumbHtml += `<li class="breadcrumb-item"><a href="#" onclick="selectCategoryByName('${nodeName}')">${nodeName}</a></li>`;
+                breadcrumbHtml += `<li class="breadcrumb-item"><a href="#" data-action="select-category-by-name" data-value="${nodeName}">${nodeName}</a></li>`;
             }
         });
 
@@ -566,10 +583,10 @@ function createMaterialCard(material) {
                 <p class="compact-material-meta">${createdDate} • ${fileSize}</p>
             </div>
             <div class="compact-material-actions">
-                <button class="btn btn-outline-primary compact-btn" onclick="viewMaterial(${material.id})" title="Просмотр">
+                <button class="btn btn-outline-primary compact-btn" data-action="view-material" data-id="${material.id}" title="Просмотр">
                     <i class="bi bi-eye"></i>
                 </button>
-                <button class="btn btn-outline-success compact-btn" onclick="downloadMaterial(${material.id})" title="Скачать">
+                <button class="btn btn-outline-success compact-btn" data-action="download-material" data-id="${material.id}" title="Скачать">
                     <i class="bi bi-download"></i>
                 </button>
             </div>
@@ -609,10 +626,10 @@ function createMaterialCard(material) {
                 </div>
                 <div class="card-footer bg-transparent">
                     <div class="d-flex gap-2">
-                        <button class="btn btn-outline-primary btn-sm flex-grow-1" onclick="viewMaterial(${material.id})">
+                        <button class="btn btn-outline-primary btn-sm flex-grow-1" data-action="view-material" data-id="${material.id}">
                             <i class="bi bi-eye me-1"></i>Просмотр
                         </button>
-                        <button class="btn btn-outline-success btn-sm" onclick="downloadMaterial(${material.id})">
+                        <button class="btn btn-outline-success btn-sm" data-action="download-material" data-id="${material.id}">
                             <i class="bi bi-download"></i>
                         </button>
                     </div>
@@ -756,7 +773,7 @@ function showMaterialModal(material) {
             bodyContent = `
                 <div class="fullscreen-document-viewer">
                     <div class="pdf-controls-wrapper d-flex justify-content-between align-items-center mb-2">
-                        <button type="button" class="btn btn-outline-light btn-sm" onclick="closePDFViewer()" title="Закрыть (Escape)">
+                        <button type="button" class="btn btn-outline-light btn-sm" data-action="close-pdf-viewer" title="Закрыть (Escape)">
                             <i class="bi bi-x-lg"></i>
                         </button>
                         <div class="pdf-controls-container d-flex align-items-center gap-3">
@@ -764,14 +781,14 @@ function showMaterialModal(material) {
                                 <span class="text-white" id="totalPagesSpan">Страниц: 1</span>
                             </div>
                             <div class="pdf-zoom d-flex align-items-center">
-                                <button type="button" class="btn btn-outline-light btn-sm" onclick="zoomPDF('out')" title="Уменьшить (Ctrl + -)">
+                                <button type="button" class="btn btn-outline-light btn-sm" data-action="zoom-pdf" data-value="out" title="Уменьшить (Ctrl + -)">
                                     <i class="bi bi-dash-lg"></i>
                                 </button>
                                 <span class="text-white mx-2" id="zoomInfo" style="min-width: 50px; text-align: center;">100%</span>
-                                <button type="button" class="btn btn-outline-light btn-sm" onclick="zoomPDF('in')" title="Увеличить (Ctrl + +)">
+                                <button type="button" class="btn btn-outline-light btn-sm" data-action="zoom-pdf" data-value="in" title="Увеличить (Ctrl + +)">
                                     <i class="bi bi-plus-lg"></i>
                                 </button>
-                                <button type="button" class="btn btn-outline-light btn-sm ms-2" onclick="zoomPDF('reset')" title="100% масштаб (Ctrl + 0)">
+                                <button type="button" class="btn btn-outline-light btn-sm ms-2" data-action="zoom-pdf" data-value="reset" title="100% масштаб (Ctrl + 0)">
                                     <i class="bi bi-arrow-clockwise"></i>
                                 </button>
                             </div>
@@ -2115,7 +2132,7 @@ async function loadDOCDocument(materialId) {
                 <h5 class="mt-3">Формат .doc не поддерживается для просмотра</h5>
                 <p class="text-muted">Старый формат Microsoft Word 97-2003 (.doc) не может быть отображён в браузере.</p>
                 <p class="text-muted">Пожалуйста, скачайте файл и откройте его в Microsoft Word или LibreOffice.</p>
-                <button class="btn btn-primary mt-3" onclick="downloadMaterial(${materialId})">
+                <button class="btn btn-primary mt-3" data-action="download-material" data-id="${materialId}">
                     <i class="bi bi-download me-2"></i>Скачать документ
                 </button>
             </div>
@@ -2232,7 +2249,7 @@ async function loadRTFDocument(materialId) {
                     <h5 class="mt-3">Не удалось отобразить RTF документ</h5>
                     <p class="text-muted">${escapeHtml(error.message)}</p>
                     <p class="text-muted">Пожалуйста, скачайте файл и откройте его в Microsoft Word или LibreOffice.</p>
-                    <button class="btn btn-primary mt-3" onclick="downloadMaterial(${materialId})">
+                    <button class="btn btn-primary mt-3" data-action="download-material" data-id="${materialId}">
                         <i class="bi bi-download me-2"></i>Скачать документ
                     </button>
                 </div>

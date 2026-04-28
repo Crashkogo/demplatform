@@ -24,6 +24,17 @@ if (process.env.NODE_ENV !== 'production') {
 // Импорт конфигурации
 const config = require('./config');
 
+// Проверка критических настроек в production
+if (process.env.NODE_ENV === 'production') {
+    const jwtSecret = config.jwtSecret;
+    const isDefaultSecret = jwtSecret === 'your_super_secret_jwt_key_change_in_production';
+    if (isDefaultSecret || jwtSecret.length < 10) {
+        console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: JWT_SECRET не задан или слишком короткий (минимум 10 символов).');
+        console.error('   Задайте переменную окружения JWT_SECRET в файле .env');
+        process.exit(1);
+    }
+}
+
 // Импорт моделей и подключения к базе данных
 const { sequelize, User, Category, Material } = require('./models');
 const { testConnection, syncDatabase } = require('./config/database');
@@ -58,13 +69,11 @@ app.use(helmet({
             defaultSrc: ["'self'"],
             scriptSrc: [
                 "'self'",
-                "'unsafe-inline'", // Для inline скриптов
-                "'unsafe-hashes'", // Для onclick обработчиков
                 "https://code.jquery.com",
                 "https://cdn.jsdelivr.net",
                 "https://cdnjs.cloudflare.com"
             ],
-            scriptSrcAttr: ["'unsafe-inline'"], // Разрешаем inline обработчики событий
+            scriptSrcAttr: ["'none'"],
             styleSrc: [
                 "'self'",
                 "'unsafe-inline'",

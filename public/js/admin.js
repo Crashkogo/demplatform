@@ -238,6 +238,24 @@ function initializeEventListeners() {
     // Фильтры истории
     document.getElementById('applyHistoryFilters').addEventListener('click', () => loadHistoryLogs(1));
     document.getElementById('resetHistoryFilters').addEventListener('click', resetHistoryFiltersAndLoad);
+
+    // Делегирование событий для динамических кнопок в таблицах
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const id = btn.dataset.id ? parseInt(btn.dataset.id) : null;
+        switch (action) {
+            case 'edit-user':     editUser(id); break;
+            case 'delete-user':   deleteUser(id); break;
+            case 'delete-role':   deleteRole(id); break;
+            case 'edit-category': editCategory(id); break;
+            case 'delete-category': deleteCategory(id); break;
+            case 'view-material': viewMaterial(id); break;
+            case 'edit-material': editMaterial(id); break;
+            case 'delete-material': deleteMaterial(id); break;
+        }
+    });
 }
 
 // Инициализация обработчиков модальных окон
@@ -449,7 +467,7 @@ async function loadUsers() {
             renderUsers(allUsers);
 
             // Управляем видимостью кнопки "Добавить пользователя"
-            const addUserBtn = document.querySelector('[onclick="addUser()"]');
+            const addUserBtn = document.getElementById('addUserBtn');
             if (addUserBtn) {
                 addUserBtn.style.display = PermissionsManager.has('canCreateUsers') ? '' : 'none';
             }
@@ -491,14 +509,14 @@ function renderUsers(users) {
         let actionsHTML = '';
         if (PermissionsManager.has('canEditUsers')) {
             actionsHTML += `
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="editUser(${user.id})">
+                <button class="btn btn-sm btn-outline-primary me-1" data-action="edit-user" data-id="${user.id}">
                     <i class="bi bi-pencil"></i>
                 </button>
             `;
         }
         if (PermissionsManager.has('canDeleteUsers')) {
             actionsHTML += `
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})">
+                <button class="btn btn-sm btn-outline-danger" data-action="delete-user" data-id="${user.id}">
                     <i class="bi bi-trash"></i>
                 </button>
             `;
@@ -669,7 +687,7 @@ async function loadRoles() {
             renderRoles(allRoles);
 
             // Управляем видимостью кнопки "Добавить роль"
-            const addRoleBtn = document.querySelector('[onclick="addRole()"]');
+            const addRoleBtn = document.getElementById('addRoleBtn');
             if (addRoleBtn) {
                 addRoleBtn.style.display = PermissionsManager.has('canManageRoles') ? '' : 'none';
             }
@@ -700,7 +718,7 @@ function renderRoles(roles) {
                 <button class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#roleModal" data-role-id="${role.id}">
                     <i class="bi bi-pencil"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteRole(${role.id})">
+                <button class="btn btn-sm btn-outline-danger" data-action="delete-role" data-id="${role.id}">
                     <i class="bi bi-trash"></i>
                 </button>
             `;
@@ -904,7 +922,7 @@ async function loadCategories() {
             updateCategorySelects();
 
             // Управляем видимостью кнопки "Добавить категорию"
-            const addCategoryBtn = document.querySelector('[onclick="addCategory()"]');
+            const addCategoryBtn = document.getElementById('addCategoryBtn');
             if (addCategoryBtn) {
                 addCategoryBtn.style.display = PermissionsManager.has('canCreateCategories') ? '' : 'none';
             }
@@ -937,14 +955,14 @@ function renderCategories(categories) {
         if (hasAccess) {
             if (PermissionsManager.has('canEditCategories')) {
                 actionsHTML += `
-                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editCategory(${category.id})">
+                    <button class="btn btn-sm btn-outline-primary me-1" data-action="edit-category" data-id="${category.id}">
                         <i class="bi bi-pencil"></i>
                     </button>
                 `;
             }
             if (PermissionsManager.has('canDeleteCategories')) {
                 actionsHTML += `
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteCategory(${category.id})">
+                    <button class="btn btn-sm btn-outline-danger" data-action="delete-category" data-id="${category.id}">
                         <i class="bi bi-trash"></i>
                     </button>
                 `;
@@ -1146,21 +1164,21 @@ function renderMaterials(materials) {
         let actionsHTML = '';
         if (PermissionsManager.has('canViewMaterials')) {
             actionsHTML += `
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="viewMaterial(${material.id})">
+                <button class="btn btn-sm btn-outline-primary me-1" data-action="view-material" data-id="${material.id}">
                     <i class="bi bi-eye"></i>
                 </button>
             `;
         }
         if (hasAccess && PermissionsManager.has('canEditMaterials')) {
             actionsHTML += `
-                <button class="btn btn-sm btn-outline-secondary me-1" onclick="editMaterial(${material.id})">
+                <button class="btn btn-sm btn-outline-secondary me-1" data-action="edit-material" data-id="${material.id}">
                     <i class="bi bi-pencil"></i>
                 </button>
             `;
         }
         if (hasAccess && PermissionsManager.has('canDeleteMaterials')) {
             actionsHTML += `
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteMaterial(${material.id})">
+                <button class="btn btn-sm btn-outline-danger" data-action="delete-material" data-id="${material.id}">
                     <i class="bi bi-trash"></i>
                 </button>
             `;

@@ -37,7 +37,7 @@ const checkAccess = (requiredPermission) => {
             if (!role[requiredPermission]) {
                 return res.status(403).json({
                     success: false,
-                    message: `Доступ запрещен: недостаточно прав (требуется: ${requiredPermission})`
+                    message: 'Доступ запрещен: недостаточно прав'
                 });
             }
 
