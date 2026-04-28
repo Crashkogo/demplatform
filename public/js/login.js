@@ -77,16 +77,8 @@ loginForm.addEventListener('submit', async function (e) {
 
             showAlert('Успешная авторизация! Перенаправление...', 'success');
 
-            // Перенаправляем в зависимости от прав
             setTimeout(() => {
-                if (PermissionsManager.isAdmin() ||
-                    PermissionsManager.canViewSection('users') ||
-                    PermissionsManager.canViewSection('roles') ||
-                    PermissionsManager.canViewSection('categories')) {
-                    window.location.href = '/admin';
-                } else {
-                    window.location.href = '/app';
-                }
+                window.location.href = '/app';
             }, 1000);
         } else {
             showAlert(response.data.message || 'Ошибка авторизации');

@@ -71,6 +71,20 @@ async function initializeApp() {
             return;
         }
 
+        // Проверяем что у пользователя есть хоть какой-то доступ к админ-панели
+        const hasAdminAccess = PermissionsManager.isAdmin() ||
+            PermissionsManager.canViewSection('users') ||
+            PermissionsManager.canViewSection('roles') ||
+            PermissionsManager.canViewSection('categories') ||
+            PermissionsManager.canViewSection('materials') ||
+            PermissionsManager.canViewSection('upload') ||
+            PermissionsManager.canViewSection('history-section');
+
+        if (!hasAdminAccess) {
+            window.location.href = '/app';
+            return;
+        }
+
         console.log('Пользователь загружен:', {
             login: user.login,
             roleName: user.roleName,
