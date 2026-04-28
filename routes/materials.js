@@ -8,6 +8,7 @@ const { checkAccess, addAccessibleCategories } = require('../middleware/authoriz
 const { handleUpload, deleteFile } = require('../middleware/upload');
 const { logEvent } = require('../services/auditService');
 const convertService = require('../services/convertService');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -124,7 +125,7 @@ router.get('/', [authenticateToken, addAccessibleCategories], async (req, res) =
             }
         });
     } catch (error) {
-        console.error('Search materials error:', error);
+        logger.error('Search materials error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка поиска материалов'
@@ -174,7 +175,7 @@ router.get('/:id', [authenticateToken, addAccessibleCategories], async (req, res
             data: material
         });
     } catch (error) {
-        console.error('Get material error:', error);
+        logger.error('Get material error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения материала'
@@ -200,7 +201,7 @@ router.get('/:id/view', [authenticateToken, addAccessibleCategories], async (req
         const role = user.roleData;
 
         if (!role) {
-            console.error('❌ Роль не найдена для пользователя:', user.login);
+            logger.error('Роль не найдена для пользователя:', user.login);
             return res.status(403).json({
                 success: false,
                 message: 'Роль пользователя не найдена'
@@ -209,7 +210,7 @@ router.get('/:id/view', [authenticateToken, addAccessibleCategories], async (req
 
         // Администратор или полный доступ - разрешаем
         if (role.isAdmin || role.canManageAllCategories) {
-            console.log('✅ Администратор или полный доступ - просмотр разрешен');
+            logger.debug('Администратор или полный доступ - просмотр разрешен');
         } else if (!role.canViewMaterials) {
             // Проверяем право на просмотр материалов
             return res.status(403).json({
@@ -238,7 +239,7 @@ router.get('/:id/view', [authenticateToken, addAccessibleCategories], async (req
 
         // Увеличиваем счетчик просмотров (асинхронно, не блокируем просмотр)
         material.incrementView().catch(err =>
-            console.error('Error incrementing view count:', err)
+            logger.error('Error incrementing view count:', err)
         );
 
         // Получаем статистику файла
@@ -271,7 +272,7 @@ router.get('/:id/view', [authenticateToken, addAccessibleCategories], async (req
             res.sendFile(filePath);
         }
     } catch (error) {
-        console.error('View material error:', error);
+        logger.error('View material error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка просмотра материала'
@@ -350,14 +351,14 @@ router.get('/:id/preview-pdf', [authenticateToken, addAccessibleCategories], asy
             });
         }
 
-        console.log('Начинаем конвертацию RTF в PDF:', filePath);
+        logger.debug('Начинаем конвертацию RTF в PDF:', filePath);
 
         // Конвертируем RTF в PDF
         const pdfBuffer = await convertService.convertRTFtoPDF(filePath);
 
         // Увеличиваем счетчик просмотров
         material.incrementView().catch(err =>
-            console.error('Error incrementing view count:', err)
+            logger.error('Error incrementing view count:', err)
         );
 
         // Отправляем PDF
@@ -368,7 +369,7 @@ router.get('/:id/preview-pdf', [authenticateToken, addAccessibleCategories], asy
         res.send(pdfBuffer);
 
     } catch (error) {
-        console.error('RTF to PDF conversion error:', error);
+        logger.error('RTF to PDF conversion error:', error);
         res.status(500).json({
             success: false,
             message: `Ошибка конвертации: ${error.message}`
@@ -394,7 +395,7 @@ router.get('/:id/download', [authenticateToken, addAccessibleCategories], async 
         const role = user.roleData;
 
         if (!role) {
-            console.error('❌ Роль не найдена для пользователя:', user.login);
+            logger.error('Роль не найдена для пользователя:', user.login);
             return res.status(403).json({
                 success: false,
                 message: 'Роль пользователя не найдена'
@@ -403,7 +404,7 @@ router.get('/:id/download', [authenticateToken, addAccessibleCategories], async 
 
         // Администратор или полный доступ - разрешаем
         if (role.isAdmin || role.canManageAllCategories) {
-            console.log('✅ Администратор или полный доступ - скачивание разрешено');
+            logger.debug('Администратор или полный доступ - скачивание разрешено');
         } else if (!role.canDownloadMaterials) {
             // Проверяем право на скачивание материалов
             return res.status(403).json({
@@ -432,7 +433,7 @@ router.get('/:id/download', [authenticateToken, addAccessibleCategories], async 
 
         // Увеличиваем счетчик скачиваний (асинхронно, не блокируем скачивание)
         material.incrementDownload().catch(err =>
-            console.error('Error incrementing download count:', err)
+            logger.error('Error incrementing download count:', err)
         );
 
         // Логируем событие скачивания
@@ -473,7 +474,7 @@ router.get('/:id/download', [authenticateToken, addAccessibleCategories], async 
             stream.pipe(res);
         }
     } catch (error) {
-        console.error('Download material error:', error);
+        logger.error('Download material error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка скачивания материала'
@@ -536,20 +537,11 @@ router.post('/', [authenticateToken, checkAccess('canCreateMaterials'), handleUp
             }
         }
 
-        console.log('Создаем материал с данными:', {
+        logger.debug('Создаем материал с данными:', {
             title,
-            description,
             filename: req.file.filename,
             originalName: req.file.originalname,
             categoryId,
-            tags,
-            fileType: determineFileType(req.file.mimetype),
-            mimeType: req.file.mimetype
-        });
-
-        console.log('Материал перед сохранением:', {
-            title,
-            fileType: determineFileType(req.file.mimetype),
             mimeType: req.file.mimetype
         });
 
@@ -567,7 +559,7 @@ router.post('/', [authenticateToken, checkAccess('canCreateMaterials'), handleUp
             fileType: determineFileType(normalizedMime)
         });
 
-        console.log('Материал сохранен успешно с ID:', material.id);
+        logger.debug('Материал сохранен с ID:', material.id);
 
         // Получаем материал с связанными данными
         const materialWithAssociations = await Material.findByPk(material.id, {
@@ -603,7 +595,7 @@ router.post('/', [authenticateToken, checkAccess('canCreateMaterials'), handleUp
             deleteFile(req.file.path);
         }
 
-        console.error('Create material error:', error);
+        logger.error('Create material error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка загрузки материала'
@@ -680,7 +672,7 @@ router.put('/:id', [authenticateToken, checkAccess('canEditMaterials')], async (
         });
 
     } catch (error) {
-        console.error('Update material error:', error);
+        logger.error('Update material error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка обновления материала'
@@ -719,7 +711,7 @@ router.delete('/:id', [authenticateToken, checkAccess('canDeleteMaterials')], as
             message: 'Материал удален успешно'
         });
     } catch (error) {
-        console.error('Delete material error:', error);
+        logger.error('Delete material error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка удаления материала'

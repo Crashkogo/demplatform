@@ -1,4 +1,5 @@
 const { AuditEvent } = require('../models');
+const logger = require('../utils/logger');
 
 /**
  * Asynchronously logs an audit event.
@@ -11,7 +12,7 @@ const { AuditEvent } = require('../models');
 const logEvent = (userId, eventType, details = {}) => {
     AuditEvent.create({ userId, eventType, details })
         .catch(err => {
-            console.error('Failed to log audit event:', err);
+            logger.error('Failed to log audit event:', err);
         });
 };
 

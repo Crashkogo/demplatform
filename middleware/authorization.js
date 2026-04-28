@@ -1,4 +1,5 @@
-const { Role, User, Category } = require('../models');
+const { Category } = require('../models');
+const logger = require('../utils/logger');
 
 /**
  * Middleware для проверки прав доступа пользователя
@@ -7,26 +8,13 @@ const { Role, User, Category } = require('../models');
 const checkAccess = (requiredPermission) => {
     return async (req, res, next) => {
         try {
-            // Загружаем пользователя с ролью
-            const user = await User.findByPk(req.user.id, {
-                include: [{
-                    model: Role,
-                    as: 'roleData',
-                    include: [{ model: Category, as: 'allowedCategories' }]
-                }]
-            });
-
-            // Проверка наличия пользователя
-            if (!user) {
-                return res.status(403).json({ success: false, message: 'Пользователь не найден' });
-            }
+            // Используем данные роли, уже загруженные authenticateToken
+            const role = req.user.roleData;
 
             // Проверка наличия роли
-            if (!user.roleData) {
+            if (!role) {
                 return res.status(403).json({ success: false, message: 'Доступ запрещен: роль не назначена' });
             }
-
-            const role = user.roleData;
 
             // Администратор имеет все права
             if (role.isAdmin) {
@@ -101,7 +89,7 @@ const checkAccess = (requiredPermission) => {
             next();
 
         } catch (error) {
-            console.error('Authorization error:', error);
+            logger.error('Authorization error:', error);
             res.status(500).json({
                 success: false,
                 message: 'Ошибка проверки прав доступа'
@@ -116,32 +104,20 @@ const checkAccess = (requiredPermission) => {
  */
 const addAccessibleCategories = async (req, res, next) => {
     try {
-        const user = await User.findByPk(req.user.id, {
-            include: [{
-                model: Role,
-                as: 'roleData',
-                include: [{ model: Category, as: 'allowedCategories' }]
-            }]
-        });
-
-        if (!user) {
-            console.error('❌ Пользователь не найден при добавлении доступных категорий:', req.user.id);
-            return res.status(403).json({ success: false, message: 'Пользователь не найден' });
-        }
-
-        const role = user.roleData;
+        // Используем данные роли, уже загруженные authenticateToken
+        const role = req.user.roleData;
 
         if (!role) {
-            console.error('❌ Роль не найдена для пользователя:', user.login);
+            logger.error('Роль не найдена для пользователя:', req.user.login);
             req.accessibleCategories = [];
             return next();
         }
 
-        console.log('🔍 Проверка доступа для роли:', role.name, '| isAdmin:', role.isAdmin, '| canManageAllCategories:', role.canManageAllCategories);
+        logger.debug('Проверка доступа для роли:', role.name, '| isAdmin:', role.isAdmin, '| canManageAllCategories:', role.canManageAllCategories);
 
         // Администратор или полный доступ
         if (role.isAdmin || role.canManageAllCategories) {
-            console.log('✅ Полный доступ ко всем категориям');
+            logger.debug('Полный доступ ко всем категориям');
             req.accessibleCategories = 'all';
             return next();
         }
@@ -149,11 +125,11 @@ const addAccessibleCategories = async (req, res, next) => {
         // Получаем доступные категории
         const accessibleCategories = await role.getAccessibleCategories();
         req.accessibleCategories = accessibleCategories.map(cat => cat.id);
-        console.log('🔍 Доступные категории:', req.accessibleCategories);
+        logger.debug('Доступные категории:', req.accessibleCategories);
 
         next();
     } catch (error) {
-        console.error('Error adding accessible categories:', error);
+        logger.error('Error adding accessible categories:', error);
         res.status(500).json({ success: false, message: 'Ошибка получения доступных категорий' });
     }
 };

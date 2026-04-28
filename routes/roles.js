@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { Role, Category } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { checkAccess } = require('../middleware/authorization');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.get('/', authenticateToken, async (req, res) => {
         });
         res.json({ success: true, data: roles });
     } catch (error) {
-        console.error('Get roles error:', error);
+        logger.error('Get roles error:', error);
         res.status(500).json({ success: false, message: 'Ошибка получения ролей' });
     }
 });
@@ -54,7 +55,7 @@ router.post('/', [authenticateToken, checkAccess('canManageRoles'), ...roleValid
 
         res.status(201).json({ success: true, message: 'Роль создана успешно', data: newRole });
     } catch (error) {
-        console.error('Create role error:', error);
+        logger.error('Create role error:', error);
         res.status(500).json({ success: false, message: 'Ошибка создания роли' });
     }
 });
@@ -73,7 +74,7 @@ router.get('/:id', [authenticateToken, checkAccess('canManageRoles')], async (re
 
         res.json({ success: true, data: role });
     } catch (error) {
-        console.error('Get role by id error:', error);
+        logger.error('Get role by id error:', error);
         res.status(500).json({ success: false, message: 'Ошибка получения роли' });
     }
 });
@@ -106,7 +107,7 @@ router.put('/:id', [authenticateToken, checkAccess('canManageRoles'), ...roleVal
 
         res.json({ success: true, message: 'Роль обновлена успешно', data: role });
     } catch (error) {
-        console.error('Update role error:', error);
+        logger.error('Update role error:', error);
         res.status(500).json({ success: false, message: 'Ошибка обновления роли' });
     }
 });
@@ -127,7 +128,7 @@ router.delete('/:id', [authenticateToken, checkAccess('canManageRoles')], async 
 
         res.json({ success: true, message: 'Роль удалена успешно' });
     } catch (error) {
-        console.error('Delete role error:', error);
+        logger.error('Delete role error:', error);
         res.status(500).json({ success: false, message: 'Ошибка удаления роли' });
     }
 });

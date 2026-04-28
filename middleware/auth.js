@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 const config = require('../config');
+const logger = require('../utils/logger');
 
 // Middleware для проверки JWT токена
 const authenticateToken = async (req, res, next) => {
@@ -9,7 +10,7 @@ const authenticateToken = async (req, res, next) => {
         const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
         if (!token) {
-            console.error('❌ Токен не предоставлен для:', req.method, req.originalUrl);
+            logger.warn('Токен не предоставлен для:', req.method, req.originalUrl);
             return res.status(401).json({
                 success: false,
                 message: 'Токен доступа не предоставлен'
@@ -17,7 +18,7 @@ const authenticateToken = async (req, res, next) => {
         }
 
         const decoded = jwt.verify(token, config.jwtSecret);
-        console.log('✅ Токен верифицирован для пользователя ID:', decoded.userId);
+        logger.debug('Токен верифицирован для пользователя ID:', decoded.userId);
 
         // Загружаем пользователя с ролью
         const { Role } = require('../models');
@@ -42,7 +43,7 @@ const authenticateToken = async (req, res, next) => {
 
         // Проверяем наличие роли
         if (!user.roleData) {
-            console.error('❌ Роль не найдена для пользователя:', user.login);
+            logger.error('Роль не найдена для пользователя:', user.login);
             return res.status(403).json({
                 success: false,
                 message: 'Роль пользователя не найдена. Обратитесь к администратору.'
@@ -65,7 +66,7 @@ const authenticateToken = async (req, res, next) => {
             });
         }
 
-        console.error('Auth middleware error:', error);
+        logger.error('Auth middleware error:', error);
         res.status(500).json({
             success: false,
             message: 'Внутренняя ошибка сервера'

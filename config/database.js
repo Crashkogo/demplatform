@@ -1,6 +1,7 @@
 // config/database.js
 require('dotenv').config();  // Загружаем .env перед использованием process.env
 const { Sequelize } = require('sequelize');
+const logger = require('../utils/logger');
 
 // Создаем соединение с PostgreSQL
 const sequelize = new Sequelize({
@@ -30,10 +31,10 @@ const sequelize = new Sequelize({
 const testConnection = async () => {
     try {
         await sequelize.authenticate();
-        console.log('✅ Подключение к PostgreSQL установлено успешно');
+        logger.info('Подключение к PostgreSQL установлено успешно');
         return true;
     } catch (error) {
-        console.error('❌ Не удалось подключиться к PostgreSQL:', error);
+        logger.error('Не удалось подключиться к PostgreSQL:', error);
         return false;
     }
 };
@@ -43,10 +44,10 @@ const syncDatabase = async (options = {}) => {
     try {
         const { force = false, alter = false } = options;
         await sequelize.sync({ force, alter });
-        console.log('✅ Синхронизация базы данных завершена');
+        logger.info('Синхронизация базы данных завершена');
         return true;
     } catch (error) {
-        console.error('❌ Ошибка синхронизации базы данных:', error);
+        logger.error('Ошибка синхронизации базы данных:', error);
         return false;
     }
 };

@@ -4,6 +4,7 @@ const { User, Material, Category, sequelize, AuditEvent } = require('../models')
 const { Op } = require('sequelize');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -109,7 +110,7 @@ router.get('/stats', [authenticateToken, requireAdmin], async (req, res) => {
             data: stats
         });
     } catch (error) {
-        console.error('Get admin stats error:', error);
+        logger.error('Get admin stats error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения статистики',
@@ -119,34 +120,21 @@ router.get('/stats', [authenticateToken, requireAdmin], async (req, res) => {
 });
 
 // Middleware для проверки доступа к списку пользователей (canViewUsers ИЛИ canViewLogs)
-const canViewUsersList = async (req, res, next) => {
-    try {
-        const { Role } = require('../models');
-        const role = await Role.findByPk(req.user.roleId);
+const canViewUsersList = (req, res, next) => {
+    const role = req.user.roleData;
 
-        if (!role) {
-            return res.status(403).json({
-                success: false,
-                message: 'Роль не найдена'
-            });
-        }
-
-        // Администратор или пользователь с правами canViewUsers или canViewLogs
-        if (role.isAdmin || role.canViewUsers || role.canViewLogs) {
-            return next();
-        }
-
-        return res.status(403).json({
-            success: false,
-            message: 'Доступ запрещен: недостаточно прав для просмотра списка пользователей'
-        });
-    } catch (error) {
-        console.error('canViewUsersList middleware error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Ошибка проверки прав доступа'
-        });
+    if (!role) {
+        return res.status(403).json({ success: false, message: 'Роль не найдена' });
     }
+
+    if (role.isAdmin || role.canViewUsers || role.canViewLogs) {
+        return next();
+    }
+
+    return res.status(403).json({
+        success: false,
+        message: 'Доступ запрещен: недостаточно прав для просмотра списка пользователей'
+    });
 };
 
 // GET /api/admin/users - Получение списка пользователей
@@ -186,7 +174,7 @@ router.get('/users', [authenticateToken, canViewUsersList], async (req, res) => 
             }
         });
     } catch (error) {
-        console.error('Get users error:', error);
+        logger.error('Get users error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения пользователей'
@@ -238,7 +226,7 @@ router.post('/users', [authenticateToken, requireAdmin, ...userValidation], asyn
             data: user.toSafeObject()
         });
     } catch (error) {
-        console.error('Create user error:', error);
+        logger.error('Create user error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка создания пользователя'
@@ -289,7 +277,7 @@ router.put('/users/:id', [authenticateToken, requireAdmin], async (req, res) => 
             data: user.toSafeObject()
         });
     } catch (error) {
-        console.error('Update user error:', error);
+        logger.error('Update user error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка обновления пользователя'
@@ -325,7 +313,7 @@ router.delete('/users/:id', [authenticateToken, requireAdmin], async (req, res) 
             message: 'Пользователь удален успешно'
         });
     } catch (error) {
-        console.error('Delete user error:', error);
+        logger.error('Delete user error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка удаления пользователя'
@@ -334,35 +322,22 @@ router.delete('/users/:id', [authenticateToken, requireAdmin], async (req, res) 
 });
 
 // Middleware для проверки доступа к списку материалов (любое право на работу с материалами)
-const canAccessMaterialsList = async (req, res, next) => {
-    try {
-        const { Role } = require('../models');
-        const role = await Role.findByPk(req.user.roleId);
+const canAccessMaterialsList = (req, res, next) => {
+    const role = req.user.roleData;
 
-        if (!role) {
-            return res.status(403).json({
-                success: false,
-                message: 'Роль не найдена'
-            });
-        }
-
-        // Администратор или пользователь с любым правом на работу с материалами
-        if (role.isAdmin || role.canViewMaterials || role.canCreateMaterials ||
-            role.canEditMaterials || role.canDeleteMaterials) {
-            return next();
-        }
-
-        return res.status(403).json({
-            success: false,
-            message: 'Доступ запрещен: недостаточно прав для просмотра списка материалов'
-        });
-    } catch (error) {
-        console.error('canAccessMaterialsList middleware error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Ошибка проверки прав доступа'
-        });
+    if (!role) {
+        return res.status(403).json({ success: false, message: 'Роль не найдена' });
     }
+
+    if (role.isAdmin || role.canViewMaterials || role.canCreateMaterials ||
+        role.canEditMaterials || role.canDeleteMaterials) {
+        return next();
+    }
+
+    return res.status(403).json({
+        success: false,
+        message: 'Доступ запрещен: недостаточно прав для просмотра списка материалов'
+    });
 };
 
 // GET /api/admin/materials - Получение списка материалов для админки
@@ -391,7 +366,7 @@ router.get('/materials', [authenticateToken, canAccessMaterialsList, addAccessib
             }
         });
     } catch (error) {
-        console.error('Get admin materials error:', error);
+        logger.error('Get admin materials error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения материалов'
@@ -449,7 +424,7 @@ router.get('/logs', [authenticateToken, checkAccess('canViewLogs')], async (req,
         });
 
     } catch (error) {
-        console.error('Get audit logs error:', error);
+        logger.error('Get audit logs error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения истории действий'

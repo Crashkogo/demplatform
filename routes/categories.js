@@ -4,6 +4,7 @@ const { Category, Material } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { logEvent } = require('../services/auditService');
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -80,7 +81,7 @@ async function getCategoryPath(categoryId) {
 // GET /api/categories - Получение дерева категорий с учетом прав доступа
 router.get('/', [authenticateToken, addAccessibleCategories], async (req, res) => {
     try {
-        console.log('Запрос категорий от пользователя:', req.user.login);
+        logger.debug('Запрос категорий от пользователя:', req.user.login);
 
         // Загружаем все категории
         const allCategories = await Category.findAll({
@@ -119,14 +120,14 @@ router.get('/', [authenticateToken, addAccessibleCategories], async (req, res) =
             }
         });
 
-        console.log('Найдено доступных категорий:', filteredCategories.length);
+        logger.debug('Найдено доступных категорий:', filteredCategories.length);
 
         res.json({
             success: true,
             data: tree
         });
     } catch (error) {
-        console.error('Get categories error:', error);
+        logger.error('Get categories error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения категорий'
@@ -158,7 +159,7 @@ router.get('/flat', [authenticateToken, addAccessibleCategories], async (req, re
             data: filteredCategories
         });
     } catch (error) {
-        console.error('Get flat categories error:', error);
+        logger.error('Get flat categories error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения категорий'
@@ -194,7 +195,7 @@ router.get('/accessible', [authenticateToken, addAccessibleCategories], async (r
             hasFullAccess: req.accessibleCategories === 'all'
         });
     } catch (error) {
-        console.error('Get accessible categories error:', error);
+        logger.error('Get accessible categories error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения доступных категорий'
@@ -220,7 +221,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
             data: category
         });
     } catch (error) {
-        console.error('Get category error:', error);
+        logger.error('Get category error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения категории'
@@ -262,7 +263,7 @@ router.get('/:id/materials', authenticateToken, async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Get category materials error:', error);
+        logger.error('Get category materials error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка получения материалов категории'
@@ -273,11 +274,11 @@ router.get('/:id/materials', authenticateToken, async (req, res) => {
 // POST /api/categories - Создание новой категории
 router.post('/', [authenticateToken, checkAccess('canCreateCategories'), ...categoryValidation], async (req, res) => {
     try {
-        console.log('Создание категории - полученные данные:', req.body);
+        logger.debug('Создание категории - полученные данные:', req.body);
 
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            console.log('Ошибки валидации при создании категории:', errors.array());
+            logger.debug('Ошибки валидации при создании категории:', errors.array());
             return res.status(400).json({
                 success: false,
                 message: 'Ошибки валидации',
@@ -325,7 +326,7 @@ router.post('/', [authenticateToken, checkAccess('canCreateCategories'), ...cate
             'Категория': categoryPath
         });
 
-        console.log('Категория успешно создана:', {
+        logger.debug('Категория успешно создана:', {
             id: category.id,
             name: category.name,
             parentId: category.parentId,
@@ -338,7 +339,7 @@ router.post('/', [authenticateToken, checkAccess('canCreateCategories'), ...cate
             data: category
         });
     } catch (error) {
-        console.error('Create category error:', error);
+        logger.error('Create category error:', error);
         if (error.code === 11000) {
             res.status(400).json({
                 success: false,
@@ -434,7 +435,7 @@ router.put('/:id', [authenticateToken, checkAccess('canEditCategories'), ...cate
             data: category
         });
     } catch (error) {
-        console.error('Update category error:', error);
+        logger.error('Update category error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка обновления категории'
@@ -489,7 +490,7 @@ router.delete('/:id', [authenticateToken, checkAccess('canDeleteCategories')], a
             message: 'Категория удалена успешно'
         });
     } catch (error) {
-        console.error('Delete category error:', error);
+        logger.error('Delete category error:', error);
         res.status(500).json({
             success: false,
             message: 'Ошибка удаления категории'

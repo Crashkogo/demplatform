@@ -2,6 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const config = require('../config');
+const logger = require('../utils/logger');
 
 // Создаем папку uploads если её нет
 const uploadsDir = config.uploadsPath;
@@ -51,7 +52,7 @@ const fileFilter = (req, file, cb) => {
     // Дополнительная проверка по расширению файла для RTF
     const ext = file.originalname.toLowerCase().split('.').pop();
     if (ext === 'rtf') {
-        console.log('RTF файл определён по расширению, MIME:', file.mimetype);
+        logger.debug('RTF файл определён по расширению, MIME:', file.mimetype);
         return cb(null, true);
     }
 
@@ -121,7 +122,7 @@ const deleteFile = (filePath) => {
             return true;
         }
     } catch (error) {
-        console.error('Error deleting file:', error);
+        logger.error('Error deleting file:', error);
     }
     return false;
 };

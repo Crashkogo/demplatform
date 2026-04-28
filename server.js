@@ -225,7 +225,9 @@ const initializeDatabase = async () => {
 
         // Синхронизируем модели с базой данных
         console.log('🔄 Синхронизация моделей с базой данных...');
-        await syncDatabase({ alter: true }); // alter: true позволяет обновлять существующие таблицы
+        // В production только проверяем что таблицы существуют, не меняем схему
+        const alterSchema = process.env.NODE_ENV !== 'production';
+        await syncDatabase({ alter: alterSchema });
 
         console.log('✅ База данных PostgreSQL готова к работе');
 

@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { User, Role } = require('../models');
 const { generateToken, authenticateToken } = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -74,16 +75,16 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
         const { login, password } = req.body;
 
         // Поиск пользователя с ролью
-        console.log('🔍 Ищем пользователя:', login);
+        logger.debug('Ищем пользователя:', login);
         const user = await User.findOne({
             where: { login },
             include: [{ model: Role, as: 'roleData' }]
         });
 
-        console.log('🔍 Пользователь найден:', !!user);
+        logger.debug('Пользователь найден:', !!user);
         if (user) {
-            console.log('🔍 roleData присутствует:', !!user.roleData);
-            console.log('🔍 roleId:', user.roleId);
+            logger.debug('roleData присутствует:', !!user.roleData);
+            logger.debug('roleId:', user.roleId);
         }
 
         if (!user) {
@@ -104,14 +105,14 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
 
         // Проверка наличия роли
         if (!user.roleData) {
-            console.error('❌ Роль не загружена для пользователя:', user.login);
+            logger.error('Роль не загружена для пользователя:', user.login);
             return res.status(403).json({
                 success: false,
                 message: 'Роль пользователя не найдена. Обратитесь к администратору.'
             });
         }
 
-        console.log('✅ Роль загружена:', user.roleData.name);
+        logger.debug('Роль загружена:', user.roleData.name);
 
         // Обновление времени последнего входа
         user.lastLogin = new Date();
@@ -122,12 +123,12 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
 
         // Получаем права пользователя
         const permissions = user.roleData.getPermissions();
-        console.log('✅ Права получены:', Object.keys(permissions).length);
+        logger.debug('Права получены:', Object.keys(permissions).length);
 
         // Получаем доступные категории (только ID для оптимизации)
         const accessibleCategories = await user.getAccessibleCategories();
         const accessibleCategoryIds = accessibleCategories.map(cat => cat.id);
-        console.log('✅ Категории получены:', accessibleCategoryIds.length);
+        logger.debug('Категории получены:', accessibleCategoryIds.length);
 
         const userObject = user.toSafeObject();
         const userWithRole = buildUserWithRole(userObject, user.roleData);
@@ -141,7 +142,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
             accessibleCategoryIds
         };
 
-        console.log('📤 Отправляем ответ логина для пользователя:', {
+        logger.debug('Отправляем ответ логина для пользователя:', {
             login: userWithRole.login,
             roleName: userWithRole.Role.name,
             isAdmin: userWithRole.Role.isAdmin
@@ -150,7 +151,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
         res.json(response);
 
     } catch (error) {
-        console.error('Login error:', error);
+        logger.error('Login error:', error);
         res.status(500).json({
             success: false,
             message: 'Внутренняя ошибка сервера'
@@ -164,7 +165,7 @@ router.get('/me', authenticateToken, async (req, res) => {
         const userObject = req.user.toSafeObject();
         const userWithRole = buildUserWithRole(userObject, req.user.roleData);
 
-        console.log('📤 /api/auth/me - Отправляем пользователя:', {
+        logger.debug('/api/auth/me - Отправляем пользователя:', {
             login: userWithRole.login,
             roleName: userWithRole.Role.name,
             isAdmin: userWithRole.Role.isAdmin
@@ -175,7 +176,7 @@ router.get('/me', authenticateToken, async (req, res) => {
             user: userWithRole
         });
     } catch (error) {
-        console.error('Get user info error:', error);
+        logger.error('Get user info error:', error);
         res.status(500).json({
             success: false,
             message: 'Внутренняя ошибка сервера'

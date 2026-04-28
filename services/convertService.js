@@ -2,6 +2,7 @@ const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const logger = require('../utils/logger');
 
 /**
  * Сервис конвертации документов через LibreOffice
@@ -39,12 +40,12 @@ class ConvertService {
             // --outdir - папка для результата
             const command = `soffice --headless --convert-to pdf --outdir "${uniqueDir}" "${inputPath}"`;
 
-            console.log('Запуск конвертации:', command);
+            logger.debug('Запуск конвертации:', command);
 
             exec(command, { timeout: 60000 }, (error, stdout, stderr) => {
                 if (error) {
-                    console.error('Ошибка конвертации:', error);
-                    console.error('stderr:', stderr);
+                    logger.error('Ошибка конвертации:', error);
+                    logger.error('stderr:', stderr);
 
                     // Очищаем временную папку
                     this.cleanupDir(uniqueDir);
@@ -52,7 +53,7 @@ class ConvertService {
                     return reject(new Error(`Ошибка конвертации: ${error.message}`));
                 }
 
-                console.log('Вывод LibreOffice:', stdout);
+                logger.debug('Вывод LibreOffice:', stdout);
 
                 // Находим сконвертированный PDF файл
                 const files = fs.readdirSync(uniqueDir);
@@ -89,10 +90,10 @@ class ConvertService {
         return new Promise((resolve) => {
             exec('soffice --version', (error, stdout) => {
                 if (error) {
-                    console.log('LibreOffice не найден');
+                    logger.warn('LibreOffice не найден');
                     resolve(false);
                 } else {
-                    console.log('LibreOffice версия:', stdout.trim());
+                    logger.debug('LibreOffice версия:', stdout.trim());
                     resolve(true);
                 }
             });
@@ -113,7 +114,7 @@ class ConvertService {
                 fs.rmdirSync(dirPath);
             }
         } catch (error) {
-            console.error('Ошибка очистки временной папки:', error);
+            logger.error('Ошибка очистки временной папки:', error);
         }
     }
 }
