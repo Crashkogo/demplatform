@@ -90,13 +90,13 @@ function setupUserInterface() {
         console.log('Отображаемая роль:', roleName);
     }
 
-    // Показываем кнопки админ-панели, если есть права
+    // Показываем ссылку на админ-панель только если есть права на реальные действия в ней.
+    // canViewMaterials и canDownloadMaterials — права для /app, не для панели.
     const hasAdminAccess = PermissionsManager.isAdmin() ||
         PermissionsManager.canViewSection('users') ||
         PermissionsManager.canViewSection('roles') ||
-        PermissionsManager.canViewSection('categories') ||
-        PermissionsManager.canViewSection('materials') ||
-        PermissionsManager.canViewSection('upload') ||
+        PermissionsManager.has('canCreateCategories') || PermissionsManager.has('canEditCategories') || PermissionsManager.has('canDeleteCategories') ||
+        PermissionsManager.has('canCreateMaterials') || PermissionsManager.has('canEditMaterials') || PermissionsManager.has('canDeleteMaterials') ||
         PermissionsManager.canViewSection('history-section');
 
     console.log('Проверка доступа к админ-панели:', hasAdminAccess);
