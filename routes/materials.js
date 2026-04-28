@@ -8,9 +8,18 @@ const { checkAccess, addAccessibleCategories } = require('../middleware/authoriz
 const { handleUpload, deleteFile } = require('../middleware/upload');
 const { logEvent } = require('../services/auditService');
 const convertService = require('../services/convertService');
+const { writeLimiter, uploadLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
+const config = require('../config');
 
 const router = express.Router();
+
+// Проверка что путь к файлу находится внутри папки uploads (защита от path traversal)
+const uploadsRoot = path.resolve(config.uploadsPath);
+function isSafeFilePath(filePath) {
+    const resolved = path.resolve(filePath);
+    return resolved.startsWith(uploadsRoot + path.sep) || resolved.startsWith(uploadsRoot);
+}
 
 // Валидаторы
 const materialValidation = [
@@ -229,6 +238,10 @@ router.get('/:id/view', [authenticateToken, addAccessibleCategories], async (req
 
         const filePath = path.resolve(material.filePath);
 
+        if (!isSafeFilePath(filePath)) {
+            return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+        }
+
         // Проверяем существование файла
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({
@@ -335,6 +348,10 @@ router.get('/:id/preview-pdf', [authenticateToken, addAccessibleCategories], asy
 
         const filePath = path.resolve(material.filePath);
 
+        if (!isSafeFilePath(filePath)) {
+            return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+        }
+
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({
                 success: false,
@@ -423,6 +440,10 @@ router.get('/:id/download', [authenticateToken, addAccessibleCategories], async 
 
         const filePath = path.resolve(material.filePath);
 
+        if (!isSafeFilePath(filePath)) {
+            return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+        }
+
         // Проверяем существование файла
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({
@@ -483,7 +504,7 @@ router.get('/:id/download', [authenticateToken, addAccessibleCategories], async 
 });
 
 // POST /api/materials - Создание нового материала
-router.post('/', [authenticateToken, checkAccess('canCreateMaterials'), handleUpload], async (req, res) => {
+router.post('/', [uploadLimiter, authenticateToken, checkAccess('canCreateMaterials'), handleUpload], async (req, res) => {
     try {
         // Валидация после загрузки файла
         await Promise.all(materialValidation.map(validation => validation.run(req)));
@@ -604,7 +625,7 @@ router.post('/', [authenticateToken, checkAccess('canCreateMaterials'), handleUp
 });
 
 // PUT /api/materials/:id - Обновление материала
-router.put('/:id', [authenticateToken, checkAccess('canEditMaterials')], async (req, res) => {
+router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canEditMaterials')], async (req, res) => {
     try {
         const { id } = req.params;
         const { title, description, categoryId } = req.body;
@@ -681,7 +702,7 @@ router.put('/:id', [authenticateToken, checkAccess('canEditMaterials')], async (
 });
 
 // DELETE /api/materials/:id - Удаление материала
-router.delete('/:id', [authenticateToken, checkAccess('canDeleteMaterials')], async (req, res) => {
+router.delete('/:id', [writeLimiter, authenticateToken, checkAccess('canDeleteMaterials')], async (req, res) => {
     try {
         const { id } = req.params;
 

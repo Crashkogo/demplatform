@@ -4,6 +4,7 @@ const { Category, Material } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { logEvent } = require('../services/auditService');
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
+const { writeLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -272,7 +273,7 @@ router.get('/:id/materials', authenticateToken, async (req, res) => {
 });
 
 // POST /api/categories - Создание новой категории
-router.post('/', [authenticateToken, checkAccess('canCreateCategories'), ...categoryValidation], async (req, res) => {
+router.post('/', [writeLimiter, authenticateToken, checkAccess('canCreateCategories'), ...categoryValidation], async (req, res) => {
     try {
         logger.debug('Создание категории - полученные данные:', req.body);
 
@@ -355,7 +356,7 @@ router.post('/', [authenticateToken, checkAccess('canCreateCategories'), ...cate
 });
 
 // PUT /api/categories/:id - Обновление категории
-router.put('/:id', [authenticateToken, checkAccess('canEditCategories'), ...categoryValidation], async (req, res) => {
+router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canEditCategories'), ...categoryValidation], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -444,7 +445,7 @@ router.put('/:id', [authenticateToken, checkAccess('canEditCategories'), ...cate
 });
 
 // DELETE /api/categories/:id - Удаление категории
-router.delete('/:id', [authenticateToken, checkAccess('canDeleteCategories')], async (req, res) => {
+router.delete('/:id', [writeLimiter, authenticateToken, checkAccess('canDeleteCategories')], async (req, res) => {
     try {
         const { id } = req.params;
 

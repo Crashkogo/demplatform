@@ -4,6 +4,7 @@ const { User, Material, Category, sequelize, AuditEvent } = require('../models')
 const { Op } = require('sequelize');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
+const { writeLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -15,8 +16,12 @@ const userValidation = [
         .withMessage('Логин должен содержать от 3 до 50 символов')
         .trim(),
     body('password')
-        .isLength({ min: 6 })
-        .withMessage('Пароль должен содержать минимум 6 символов'),
+        .isLength({ min: 8 })
+        .withMessage('Пароль должен содержать минимум 8 символов')
+        .matches(/[a-zA-Zа-яА-Я]/)
+        .withMessage('Пароль должен содержать хотя бы одну букву')
+        .matches(/[0-9]/)
+        .withMessage('Пароль должен содержать хотя бы одну цифру'),
     body('roleId')
         .isInt({ min: 1 })
         .withMessage('Необходимо указать корректную роль')
@@ -183,7 +188,7 @@ router.get('/users', [authenticateToken, canViewUsersList], async (req, res) => 
 });
 
 // POST /api/admin/users - Создание нового пользователя
-router.post('/users', [authenticateToken, requireAdmin, ...userValidation], async (req, res) => {
+router.post('/users', [writeLimiter, authenticateToken, requireAdmin, ...userValidation], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -235,7 +240,7 @@ router.post('/users', [authenticateToken, requireAdmin, ...userValidation], asyn
 });
 
 // PUT /api/admin/users/:id - Обновление пользователя
-router.put('/users/:id', [authenticateToken, requireAdmin], async (req, res) => {
+router.put('/users/:id', [writeLimiter, authenticateToken, requireAdmin], async (req, res) => {
     try {
         const { id } = req.params;
         const { login, roleId, password } = req.body;
@@ -265,7 +270,13 @@ router.put('/users/:id', [authenticateToken, requireAdmin], async (req, res) => 
             user.roleId = roleId;
         }
 
-        if (password && password.length >= 6) {
+        if (password) {
+            if (password.length < 8 || !/[a-zA-Zа-яА-Я]/.test(password) || !/[0-9]/.test(password)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Пароль должен содержать минимум 8 символов, хотя бы одну букву и одну цифру'
+                });
+            }
             user.password = password;
         }
 
@@ -286,7 +297,7 @@ router.put('/users/:id', [authenticateToken, requireAdmin], async (req, res) => 
 });
 
 // DELETE /api/admin/users/:id - Удаление пользователя
-router.delete('/users/:id', [authenticateToken, requireAdmin], async (req, res) => {
+router.delete('/users/:id', [writeLimiter, authenticateToken, requireAdmin], async (req, res) => {
     try {
         const { id } = req.params;
 

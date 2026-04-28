@@ -1,27 +1,14 @@
 // Глобальные переменные
 let currentUser = null;
-let currentToken = null;
 let dropzone = null;
 let allCategories = [];
 let allUsers = [];
 let allMaterials = [];
 let allRoles = []; // Добавлено
 
-// Настройка Axios
+// Настройка Axios — токен хранится в httpOnly cookie, браузер шлёт её автоматически
 axios.defaults.baseURL = window.location.origin;
-
-// Настройка перехватчика для токена
-axios.interceptors.request.use(
-    (config) => {
-        if (currentToken) {
-            config.headers.Authorization = `Bearer ${currentToken}`;
-        }
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
-    }
-);
+axios.defaults.withCredentials = true;
 
 // Перехватчик ответов для обработки 401 ошибок
 axios.interceptors.response.use(
@@ -67,18 +54,7 @@ async function initializeApp() {
     try {
         console.log('Инициализация админ-панели...');
 
-        // 1. Проверяем наличие токена
-        const token = localStorage.getItem('token');
-        if (!token) {
-            console.log('Токен не найден, перенаправление на страницу входа');
-            logout();
-            return;
-        }
-
-        // 2. Устанавливаем глобальный токен для axios interceptor
-        currentToken = token;
-
-        // 3. Инициализируем менеджер прав (загружает данные с сервера)
+        // Аутентификация через httpOnly cookie — токен шлётся браузером автоматически
         const isAuthSuccess = await PermissionsManager.initialize();
 
         if (!isAuthSuccess) {
@@ -1633,10 +1609,14 @@ function showError(message) {
     alert(message);
 }
 
-function logout() {
-    localStorage.removeItem('token');
+async function logout() {
+    try {
+        await axios.post('/api/auth/logout');
+    } catch (e) {
+        // Даже если запрос не прошёл — всё равно очищаем и редиректим
+    }
     localStorage.removeItem('user');
-    PermissionsManager.clear(); // Очищаем права
+    PermissionsManager.clear();
     window.location.href = '/';
 }
 

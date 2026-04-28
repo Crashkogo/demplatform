@@ -6,8 +6,8 @@ const logger = require('../utils/logger');
 // Middleware для проверки JWT токена
 const authenticateToken = async (req, res, next) => {
     try {
-        const authHeader = req.headers['authorization'];
-        const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+        // Читаем токен из httpOnly cookie (приоритет) или из заголовка Authorization
+        const token = req.cookies?.authToken || (req.headers['authorization']?.split(' ')[1]);
 
         if (!token) {
             logger.warn('Токен не предоставлен для:', req.method, req.originalUrl);

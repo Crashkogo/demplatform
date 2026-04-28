@@ -3,7 +3,18 @@ const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { User, Role } = require('../models');
 const { generateToken, authenticateToken } = require('../middleware/auth');
+const config = require('../config');
 const logger = require('../utils/logger');
+
+const isProd = process.env.NODE_ENV === 'production';
+
+// Настройки cookie с JWT
+const cookieOptions = {
+    httpOnly: true,           // JavaScript не имеет доступа к cookie
+    secure: isProd,           // Только HTTPS в production
+    sameSite: 'strict',       // Блокирует CSRF с других доменов
+    maxAge: 7 * 24 * 60 * 60 * 1000  // 7 дней (совпадает с JWT expiry)
+};
 
 const router = express.Router();
 
@@ -133,14 +144,8 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
         const userObject = user.toSafeObject();
         const userWithRole = buildUserWithRole(userObject, user.roleData);
 
-        const response = {
-            success: true,
-            message: 'Успешная авторизация',
-            token,
-            user: userWithRole,
-            permissions,
-            accessibleCategoryIds
-        };
+        // Устанавливаем JWT в httpOnly cookie — JavaScript не может его прочитать
+        res.cookie('authToken', token, cookieOptions);
 
         logger.debug('Отправляем ответ логина для пользователя:', {
             login: userWithRole.login,
@@ -148,7 +153,13 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
             isAdmin: userWithRole.Role.isAdmin
         });
 
-        res.json(response);
+        res.json({
+            success: true,
+            message: 'Успешная авторизация',
+            user: userWithRole,
+            permissions,
+            accessibleCategoryIds
+        });
 
     } catch (error) {
         logger.error('Login error:', error);
@@ -184,8 +195,13 @@ router.get('/me', authenticateToken, async (req, res) => {
     }
 });
 
-// POST /api/auth/logout - Выход из системы (в данной реализации просто возвращает успех)
+// POST /api/auth/logout - Выход из системы
 router.post('/logout', authenticateToken, (req, res) => {
+    res.clearCookie('authToken', {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: 'strict'
+    });
     res.json({
         success: true,
         message: 'Успешный выход из системы'

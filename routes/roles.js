@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { Role, Category } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { checkAccess } = require('../middleware/authorization');
+const { writeLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -34,7 +35,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // POST /api/roles - Создание новой роли
-router.post('/', [authenticateToken, checkAccess('canManageRoles'), ...roleValidation], async (req, res) => {
+router.post('/', [writeLimiter, authenticateToken, checkAccess('canManageRoles'), ...roleValidation], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -80,7 +81,7 @@ router.get('/:id', [authenticateToken, checkAccess('canManageRoles')], async (re
 });
 
 // PUT /api/roles/:id - Обновление роли
-router.put('/:id', [authenticateToken, checkAccess('canManageRoles'), ...roleValidation], async (req, res) => {
+router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canManageRoles'), ...roleValidation], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -113,7 +114,7 @@ router.put('/:id', [authenticateToken, checkAccess('canManageRoles'), ...roleVal
 });
 
 // DELETE /api/roles/:id - Удаление роли
-router.delete('/:id', [authenticateToken, checkAccess('canManageRoles')], async (req, res) => {
+router.delete('/:id', [writeLimiter, authenticateToken, checkAccess('canManageRoles')], async (req, res) => {
     try {
         const { id } = req.params;
 

@@ -166,8 +166,9 @@
     <script src="/js/permissions.js"></script>
 
     <script>
-        // Настройка Axios
+        // Настройка Axios — withCredentials нужен чтобы cookie отправлялась при запросах
         axios.defaults.baseURL = window.location.origin;
+        axios.defaults.withCredentials = true;
         axios.defaults.headers.common['Content-Type'] = 'application/json';
 
         // Элементы DOM
@@ -236,8 +237,7 @@
                 const response = await axios.post('/api/auth/login', credentials);
 
                 if (response.data.success) {
-                    // Сохраняем токен и пользователя в localStorage
-                    localStorage.setItem('token', response.data.token);
+                    // Токен сохраняется сервером в httpOnly cookie автоматически
                     localStorage.setItem('user', JSON.stringify(response.data.user));
 
                     // Устанавливаем права в менеджере, передавая весь объект пользователя
@@ -277,24 +277,21 @@
         });
 
         // Проверка существующей авторизации при загрузке страницы
-        window.addEventListener('DOMContentLoaded', function () {
-            const token = localStorage.getItem('token');
-            const user = localStorage.getItem('user');
-
-            if (token && user) {
-                try {
-                    const userData = JSON.parse(user);
+        window.addEventListener('DOMContentLoaded', async function () {
+            try {
+                const response = await axios.get('/api/auth/me');
+                if (response.data.success && response.data.user) {
+                    const user = response.data.user;
                     // Перенаправляем авторизованных пользователей
-                    if (userData.role === 'admin') {
+                    if (user.Role?.isAdmin || user.Role?.canViewUsers || user.Role?.canManageRoles) {
                         window.location.href = '/admin';
                     } else {
                         window.location.href = '/app';
                     }
-                } catch (error) {
-                    // Если данные пользователя повреждены, очищаем localStorage
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
                 }
+            } catch (error) {
+                // 401 — не авторизован, остаёмся на странице входа
+                localStorage.removeItem('user');
             }
         });
 
