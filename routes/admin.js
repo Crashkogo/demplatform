@@ -303,7 +303,7 @@ router.delete('/users/:id', [authenticateToken, requireAdmin], async (req, res) 
         const { id } = req.params;
 
         // Нельзя удалить самого себя
-        if (id === req.user._id.toString()) {
+        if (parseInt(id) === req.user.id) {
             return res.status(400).json({
                 success: false,
                 message: 'Нельзя удалить самого себя'
@@ -318,7 +318,7 @@ router.delete('/users/:id', [authenticateToken, requireAdmin], async (req, res) 
             });
         }
 
-        await User.findByIdAndDelete(id);
+        await user.destroy();
 
         res.json({
             success: true,

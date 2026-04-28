@@ -246,8 +246,9 @@ router.get('/:id/view', [authenticateToken, addAccessibleCategories], async (req
         const fileSize = stat.size;
 
         // Устанавливаем правильные заголовки
+        const encodedName = encodeURIComponent(material.originalName);
         res.setHeader('Content-Type', material.mimeType);
-        res.setHeader('Content-Disposition', `inline; filename="${material.originalName}"`);
+        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodedName}`);
         res.setHeader('Content-Length', fileSize);
 
         // Поддержка Range requests для видео и больших файлов
@@ -360,8 +361,9 @@ router.get('/:id/preview-pdf', [authenticateToken, addAccessibleCategories], asy
         );
 
         // Отправляем PDF
+        const pdfName = encodeURIComponent(material.originalName.replace(/\.rtf$/i, '.pdf'));
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `inline; filename="${material.originalName.replace(/\.rtf$/i, '.pdf')}"`);
+        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${pdfName}`);
         res.setHeader('Content-Length', pdfBuffer.length);
         res.send(pdfBuffer);
 
@@ -445,8 +447,9 @@ router.get('/:id/download', [authenticateToken, addAccessibleCategories], async 
         const fileSize = stat.size;
 
         // Устанавливаем заголовки для скачивания
+        const downloadName = encodeURIComponent(material.originalName);
         res.setHeader('Content-Type', 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename="${material.originalName}"`);
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${downloadName}`);
         res.setHeader('Content-Length', fileSize);
 
         // Поддержка Range requests для больших файлов
@@ -499,6 +502,10 @@ router.post('/', [authenticateToken, checkAccess('canCreateMaterials'), handleUp
 
         const { title, description } = req.body;
         const categoryId = parseInt(req.body.categoryId);
+
+        // Нормализуем MIME для RTF — разные браузеры и ОС присылают разные значения
+        const ext = path.extname(req.file.originalname).toLowerCase();
+        const normalizedMime = ext === '.rtf' ? 'application/rtf' : req.file.mimetype;
 
         // Проверяем существование категории
         const category = await Category.findByPk(categoryId);
@@ -553,11 +560,11 @@ router.post('/', [authenticateToken, checkAccess('canCreateMaterials'), handleUp
             originalName: req.file.originalname,
             filePath: req.file.path,
             fileSize: req.file.size,
-            mimeType: req.file.mimetype,
+            mimeType: normalizedMime,
             categoryId,
             uploadedBy: req.user.id,
             tags,
-            fileType: determineFileType(req.file.mimetype)
+            fileType: determineFileType(normalizedMime)
         });
 
         console.log('Материал сохранен успешно с ID:', material.id);

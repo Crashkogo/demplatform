@@ -1,9 +1,51 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const { User, Role } = require('../models');
 const { generateToken, authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Ограничение: не более 10 попыток входа за 15 минут с одного IP
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        success: false,
+        message: 'Слишком много попыток входа. Попробуйте через 15 минут.'
+    }
+});
+
+// Хелпер: формирует объект пользователя с ролью для ответа клиенту
+function buildUserWithRole(userObject, roleData) {
+    return {
+        ...userObject,
+        Role: {
+            id: roleData.id,
+            name: roleData.name,
+            description: roleData.description,
+            isAdmin: roleData.isAdmin,
+            canViewMaterials: roleData.canViewMaterials,
+            canDownloadMaterials: roleData.canDownloadMaterials,
+            canCreateMaterials: roleData.canCreateMaterials,
+            canEditMaterials: roleData.canEditMaterials,
+            canDeleteMaterials: roleData.canDeleteMaterials,
+            canCreateCategories: roleData.canCreateCategories,
+            canEditCategories: roleData.canEditCategories,
+            canDeleteCategories: roleData.canDeleteCategories,
+            canManageAllCategories: roleData.canManageAllCategories,
+            canViewUsers: roleData.canViewUsers,
+            canCreateUsers: roleData.canCreateUsers,
+            canEditUsers: roleData.canEditUsers,
+            canDeleteUsers: roleData.canDeleteUsers,
+            canManageRoles: roleData.canManageRoles,
+            canViewLogs: roleData.canViewLogs,
+            allowedCategories: roleData.allowedCategories || []
+        }
+    };
+}
 
 // Валидаторы
 const loginValidation = [
@@ -17,7 +59,7 @@ const loginValidation = [
 ];
 
 // POST /api/auth/login - Вход в систему
-router.post('/login', loginValidation, async (req, res) => {
+router.post('/login', loginLimiter, loginValidation, async (req, res) => {
     try {
         // Проверка валидации
         const errors = validationResult(req);
@@ -88,33 +130,7 @@ router.post('/login', loginValidation, async (req, res) => {
         console.log('✅ Категории получены:', accessibleCategoryIds.length);
 
         const userObject = user.toSafeObject();
-
-        // Формируем объект пользователя с вложенной ролью (такой же формат как в /api/auth/me)
-        const userWithRole = {
-            ...userObject,
-            Role: {
-                id: user.roleData.id,
-                name: user.roleData.name,
-                description: user.roleData.description,
-                isAdmin: user.roleData.isAdmin,
-                canViewMaterials: user.roleData.canViewMaterials,
-                canDownloadMaterials: user.roleData.canDownloadMaterials,
-                canCreateMaterials: user.roleData.canCreateMaterials,
-                canEditMaterials: user.roleData.canEditMaterials,
-                canDeleteMaterials: user.roleData.canDeleteMaterials,
-                canCreateCategories: user.roleData.canCreateCategories,
-                canEditCategories: user.roleData.canEditCategories,
-                canDeleteCategories: user.roleData.canDeleteCategories,
-                canManageAllCategories: user.roleData.canManageAllCategories,
-                canViewUsers: user.roleData.canViewUsers,
-                canCreateUsers: user.roleData.canCreateUsers,
-                canEditUsers: user.roleData.canEditUsers,
-                canDeleteUsers: user.roleData.canDeleteUsers,
-                canManageRoles: user.roleData.canManageRoles,
-                canViewLogs: user.roleData.canViewLogs,
-                allowedCategories: user.roleData.allowedCategories || []
-            }
-        };
+        const userWithRole = buildUserWithRole(userObject, user.roleData);
 
         const response = {
             success: true,
@@ -146,36 +162,7 @@ router.post('/login', loginValidation, async (req, res) => {
 router.get('/me', authenticateToken, async (req, res) => {
     try {
         const userObject = req.user.toSafeObject();
-
-        // Добавляем информацию о роли
-        const roleData = req.user.roleData;
-
-        // Формируем объект пользователя с вложенной ролью
-        const userWithRole = {
-            ...userObject,
-            Role: {
-                id: roleData.id,
-                name: roleData.name,
-                description: roleData.description,
-                isAdmin: roleData.isAdmin,
-                canViewMaterials: roleData.canViewMaterials,
-                canDownloadMaterials: roleData.canDownloadMaterials,
-                canCreateMaterials: roleData.canCreateMaterials,
-                canEditMaterials: roleData.canEditMaterials,
-                canDeleteMaterials: roleData.canDeleteMaterials,
-                canCreateCategories: roleData.canCreateCategories,
-                canEditCategories: roleData.canEditCategories,
-                canDeleteCategories: roleData.canDeleteCategories,
-                canManageAllCategories: roleData.canManageAllCategories,
-                canViewUsers: roleData.canViewUsers,
-                canCreateUsers: roleData.canCreateUsers,
-                canEditUsers: roleData.canEditUsers,
-                canDeleteUsers: roleData.canDeleteUsers,
-                canManageRoles: roleData.canManageRoles,
-                canViewLogs: roleData.canViewLogs,
-                allowedCategories: roleData.allowedCategories || []
-            }
-        };
+        const userWithRole = buildUserWithRole(userObject, req.user.roleData);
 
         console.log('📤 /api/auth/me - Отправляем пользователя:', {
             login: userWithRole.login,

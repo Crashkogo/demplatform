@@ -79,24 +79,26 @@ class Role extends Model {
         const Category = require('./Category');
         const { Op } = require('sequelize');
 
-        // Собираем все разрешенные категории и их потомков
+        // Собираем все разрешенные категории и их потомков (один запрос вместо N)
         const accessibleCategories = new Map();
 
         for (const allowedCategory of this.allowedCategories) {
-            // Добавляем саму категорию
             accessibleCategories.set(allowedCategory.id, allowedCategory);
+        }
 
-            // Получаем всех потомков этой категории (каскадно)
+        // Получаем потомков всех разрешённых категорий одним запросом
+        const pathConditions = this.allowedCategories.map(cat => ({
+            [Op.like]: `${cat.path}/%`
+        }));
+
+        if (pathConditions.length > 0) {
             const descendants = await Category.findAll({
                 where: {
-                    path: {
-                        [Op.like]: `${allowedCategory.path}/%`
-                    },
+                    path: { [Op.or]: pathConditions },
                     isActive: true
                 }
             });
 
-            // Добавляем всех потомков
             descendants.forEach(cat => {
                 accessibleCategories.set(cat.id, cat);
             });

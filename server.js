@@ -156,9 +156,9 @@ if (process.env.NODE_ENV === 'development') {
     });
 }
 
-// Парсинг JSON
-app.use(express.json({ limit: '500mb' }));
-app.use(express.urlencoded({ extended: true, limit: '500mb' }));
+// Парсинг JSON (файлы загружаются через Multer, поэтому 1mb достаточно для API)
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Статические файлы
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -310,7 +310,7 @@ const startServer = async () => {
                 console.log('🚀 HTTPS Сервер запущен');
                 console.log(`🔒 Локальный URL: https://localhost:${config.port}`);
                 console.log(`🌐 Сетевой URL: https://${localIP}:${config.port}`);
-                console.log(`👤 Админ: ${config.defaultAdmin.login} / ${config.defaultAdmin.password}`);
+                console.log(`👤 Логин администратора: ${config.defaultAdmin.login}`);
                 console.log('📋 Доступные страницы:');
                 console.log(`   • Главная (логин): https://${localIP}:${config.port}/`);
                 console.log(`   • Приложение: https://${localIP}:${config.port}/app`);
@@ -340,7 +340,7 @@ const startServer = async () => {
                 console.log('🚀 HTTP Сервер запущен');
                 console.log(`📍 Локальный URL: http://localhost:${config.port}`);
                 console.log(`🌐 Сетевой URL: http://${localIP}:${config.port}`);
-                console.log(`👤 Админ: ${config.defaultAdmin.login} / ${config.defaultAdmin.password}`);
+                console.log(`👤 Логин администратора: ${config.defaultAdmin.login}`);
                 console.log('📋 Доступные страницы:');
                 console.log(`   • Главная (логин): http://${localIP}:${config.port}/`);
                 console.log(`   • Приложение: http://${localIP}:${config.port}/app`);

@@ -19,7 +19,9 @@ class Material extends Model {
             mimeType.includes('presentation') ||
             mimeType.includes('odt') ||
             mimeType.includes('ods') ||
-            mimeType.includes('odp')
+            mimeType.includes('odp') ||
+            mimeType.includes('rtf') ||
+            mimeType === 'text/plain'
         ) {
             return 'document';
         } else {
