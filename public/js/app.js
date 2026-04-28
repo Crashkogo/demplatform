@@ -1323,7 +1323,7 @@ async function loadPDFDocument(materialId) {
         console.log('Загружаем PDF документ:', materialId);
 
         // Настраиваем PDF.js
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/libs/pdfjs/pdf.worker.min.js';
 
         const pagesContainer = document.getElementById('pdfPagesContainer');
         const scrollContainer = document.getElementById('pdfScrollContainer');
