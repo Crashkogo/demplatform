@@ -15,12 +15,8 @@
     <!-- jsTree CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" />
 
-    <!-- Отключение автообнаружения Dropzone -->
-    <script>
-        // Критически важно: отключаем автообнаружение до загрузки библиотеки
-        window.Dropzone = window.Dropzone || {};
-        window.Dropzone.autoDiscover = false;
-    </script>
+    <!-- Отключение автообнаружения Dropzone до загрузки библиотеки -->
+    <script src="/js/dropzone-init.js"></script>
 
     <style>
         body {
@@ -1055,14 +1051,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/dropzone.min.js"></script>
     <!-- jsTree -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
-
-    <!-- Дополнительное отключение автообнаружения -->
-    <script>
-        // Убеждаемся что автообнаружение отключено после загрузки библиотеки
-        if (window.Dropzone) {
-            Dropzone.autoDiscover = false;
-        }
-    </script>
 
     <script src="js/permissions.js"></script>
     <script src="js/admin.js"></script>
