@@ -2152,10 +2152,11 @@ async function showArticleForm(articleId) {
     document.getElementById('articlesListView').style.display = 'none';
     document.getElementById('articleFormView').style.display = 'block';
 
-    // Инициализируем TinyMCE
-    if (articleTinyMCE) {
-        try { tinymce.remove('#articleContent'); } catch (e) {}
-    }
+    // Убираем старый экземпляр TinyMCE и очищаем textarea
+    try { tinymce.remove('#articleContent'); } catch (e) {}
+    articleTinyMCE = null;
+    const contentArea = document.getElementById('articleContent');
+    if (contentArea) contentArea.value = '';
 
     tinymce.init({
         selector: '#articleContent',
@@ -2207,6 +2208,10 @@ function hideArticleForm() {
     document.getElementById('articleFormView').style.display = 'none';
     try { tinymce.remove('#articleContent'); } catch (e) {}
     articleTinyMCE = null;
+    const contentArea = document.getElementById('articleContent');
+    if (contentArea) contentArea.value = '';
+    document.getElementById('articleId').value = '';
+    document.getElementById('articleTitle').value = '';
 }
 
 async function saveArticle() {
