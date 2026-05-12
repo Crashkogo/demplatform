@@ -136,6 +136,10 @@ class Role extends Model {
             // Роли
             canManageRoles: this.canManageRoles,
 
+            // Статьи
+            canCreateArticles: this.canCreateArticles,
+            canReadArticles: this.canReadArticles,
+
             // Общее
             isAdmin: this.isAdmin
         };
@@ -262,6 +266,18 @@ Role.init({
         type: DataTypes.BOOLEAN,
         defaultValue: false,
         field: 'can_manage_roles'
+    },
+
+    // === ПРАВА НА СТАТЬИ ===
+    canCreateArticles: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: 'can_create_articles'
+    },
+    canReadArticles: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: 'can_read_articles'
     }
 }, {
     sequelize,

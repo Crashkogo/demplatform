@@ -46,6 +46,7 @@ const categoryRoutes = require('./routes/categories');
 const materialRoutes = require('./routes/materials');
 const adminRoutes = require('./routes/admin');
 const roleRoutes = require('./routes/roles');
+const articleRoutes = require('./routes/articles');
 
 const app = express();
 
@@ -173,6 +174,7 @@ app.use(cookieParser());
 
 // Статические файлы
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/libs/tinymce', express.static(path.join(__dirname, 'node_modules/tinymce')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API маршруты
@@ -181,6 +183,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/api', articleRoutes);
 
 // Основные HTML страницы
 app.get('/', (req, res) => {

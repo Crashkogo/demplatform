@@ -77,7 +77,8 @@ async function initializeApp() {
             PermissionsManager.canViewSection('roles') ||
             PermissionsManager.has('canCreateCategories') || PermissionsManager.has('canEditCategories') || PermissionsManager.has('canDeleteCategories') ||
             PermissionsManager.has('canCreateMaterials') || PermissionsManager.has('canEditMaterials') || PermissionsManager.has('canDeleteMaterials') ||
-            PermissionsManager.canViewSection('history-section');
+            PermissionsManager.canViewSection('history-section') ||
+            PermissionsManager.canViewSection('articles');
 
         if (!hasAdminAccess) {
             window.location.href = '/app';
@@ -362,6 +363,9 @@ async function showSection(sectionName) {
                 break;
             case 'history-section':
                 await loadHistorySection();
+                break;
+            case 'articles-section':
+                await loadArticlesSection();
                 break;
         }
     } catch (error) {
@@ -1964,3 +1968,282 @@ function resetHistoryFiltersAndLoad() {
 }
 
 
+// ============================================================
+// РАЗДЕЛ СТАТЬИ
+// ============================================================
+
+let allArticles = [];
+let allArticleSections = [];
+let articleTinyMCE = null;
+
+async function loadArticlesSection() {
+    await loadArticleSections();
+    await loadArticles();
+    initArticleEventListeners();
+
+    const canCreate = PermissionsManager.has('canCreateArticles');
+    const addBtn = document.getElementById('addArticleBtn');
+    const manageSectionsBtn = document.getElementById('manageSectionsBtn');
+    if (addBtn) addBtn.style.display = canCreate ? '' : 'none';
+    if (manageSectionsBtn) manageSectionsBtn.style.display = canCreate ? '' : 'none';
+}
+
+let articleListenersInit = false;
+function initArticleEventListeners() {
+    if (articleListenersInit) return;
+    articleListenersInit = true;
+
+    document.getElementById('addArticleBtn').addEventListener('click', () => showArticleForm(null));
+    document.getElementById('backToArticlesBtn').addEventListener('click', hideArticleForm);
+    document.getElementById('cancelArticleBtn').addEventListener('click', hideArticleForm);
+    document.getElementById('saveArticleBtn').addEventListener('click', saveArticle);
+
+    document.getElementById('manageSectionsBtn').addEventListener('click', () => {
+        renderSectionsList();
+        new bootstrap.Modal(document.getElementById('sectionsModal')).show();
+    });
+
+    document.getElementById('addSectionBtn').addEventListener('click', addSection);
+    document.getElementById('newSectionName').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); addSection(); }
+    });
+
+    // Делегирование для кнопок статей
+    document.getElementById('articlesTableBody').addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-article-action]');
+        if (!btn) return;
+        const action = btn.dataset.articleAction;
+        const id = parseInt(btn.dataset.id);
+        if (action === 'edit') await showArticleForm(id);
+        if (action === 'delete') await deleteArticle(id);
+    });
+
+    // Делегирование для кнопок разделов
+    document.getElementById('sectionsList').addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-section-action]');
+        if (!btn) return;
+        const action = btn.dataset.sectionAction;
+        const id = parseInt(btn.dataset.id);
+        if (action === 'delete') await deleteSection(id);
+    });
+}
+
+async function loadArticles() {
+    try {
+        const response = await axios.get('/api/articles');
+        if (response.data.success) {
+            allArticles = response.data.data;
+            renderArticles(allArticles);
+        }
+    } catch (err) {
+        showError('Ошибка загрузки статей');
+    }
+}
+
+function renderArticles(articles) {
+    const tbody = document.getElementById('articlesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (articles.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Статьи не найдены</td></tr>';
+        return;
+    }
+    const canEdit = PermissionsManager.has('canCreateArticles');
+    articles.forEach(a => {
+        const date = new Date(a.createdAt).toLocaleDateString('ru-RU');
+        const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${s.name}</span>`).join('');
+        const author = a.author ? a.author.login : '—';
+        let actions = '';
+        if (canEdit) {
+            actions = `
+                <button class="btn btn-sm btn-outline-primary me-1" data-article-action="edit" data-id="${a.id}"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-danger" data-article-action="delete" data-id="${a.id}"><i class="bi bi-trash"></i></button>
+            `;
+        }
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${a.title}</td>
+            <td>${sections || '—'}</td>
+            <td>${author}</td>
+            <td>${date}</td>
+            <td>${actions || '—'}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+async function loadArticleSections() {
+    try {
+        const response = await axios.get('/api/article-sections');
+        if (response.data.success) {
+            allArticleSections = response.data.data;
+        }
+    } catch (err) {
+        console.error('Ошибка загрузки разделов статей:', err);
+    }
+}
+
+function renderSectionCheckboxes(selectedIds = []) {
+    const container = document.getElementById('articleSectionsCheckboxes');
+    if (!container) return;
+    if (allArticleSections.length === 0) {
+        container.innerHTML = '<span class="text-muted">Разделы не созданы. Создайте их через кнопку "Разделы".</span>';
+        return;
+    }
+    container.innerHTML = allArticleSections.map(s => `
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="sec_${s.id}" value="${s.id}" ${selectedIds.includes(s.id) ? 'checked' : ''}>
+            <label class="form-check-label" for="sec_${s.id}">${s.name}</label>
+        </div>
+    `).join('');
+}
+
+function renderSectionsList() {
+    const list = document.getElementById('sectionsList');
+    if (!list) return;
+    if (allArticleSections.length === 0) {
+        list.innerHTML = '<li class="list-group-item text-muted">Разделы не созданы</li>';
+        return;
+    }
+    list.innerHTML = allArticleSections.map(s => `
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            ${s.name}
+            <button class="btn btn-sm btn-outline-danger" data-section-action="delete" data-id="${s.id}">
+                <i class="bi bi-trash"></i>
+            </button>
+        </li>
+    `).join('');
+}
+
+async function addSection() {
+    const input = document.getElementById('newSectionName');
+    const name = input.value.trim();
+    if (!name) return;
+    try {
+        const response = await axios.post('/api/article-sections', { name });
+        if (response.data.success) {
+            allArticleSections.push(response.data.data);
+            input.value = '';
+            renderSectionsList();
+            renderSectionCheckboxes(getSelectedSectionIds());
+        }
+    } catch (err) {
+        showError(err.response?.data?.message || 'Ошибка создания раздела');
+    }
+}
+
+async function deleteSection(id) {
+    if (!confirm('Удалить раздел?')) return;
+    try {
+        await axios.delete(`/api/article-sections/${id}`);
+        allArticleSections = allArticleSections.filter(s => s.id !== id);
+        renderSectionsList();
+        renderSectionCheckboxes(getSelectedSectionIds());
+    } catch (err) {
+        showError(err.response?.data?.message || 'Ошибка удаления раздела');
+    }
+}
+
+function getSelectedSectionIds() {
+    return Array.from(document.querySelectorAll('#articleSectionsCheckboxes input:checked')).map(cb => parseInt(cb.value));
+}
+
+async function showArticleForm(articleId) {
+    document.getElementById('articlesListView').style.display = 'none';
+    document.getElementById('articleFormView').style.display = 'block';
+
+    // Инициализируем TinyMCE
+    if (articleTinyMCE) {
+        try { tinymce.remove('#articleContent'); } catch (e) {}
+    }
+
+    tinymce.init({
+        selector: '#articleContent',
+        base_url: '/libs/tinymce',
+        suffix: '.min',
+        language: 'ru',
+        height: 450,
+        menubar: true,
+        plugins: 'lists link table code wordcount',
+        toolbar: 'undo redo | blocks | bold italic underline | alignleft aligncenter alignright | bullist numlist | link table | code',
+        content_style: 'body { font-family: Arial, sans-serif; font-size: 14px; }',
+        setup: (editor) => { articleTinyMCE = editor; }
+    });
+
+    document.getElementById('articleId').value = '';
+    document.getElementById('articleTitle').value = '';
+
+    if (articleId) {
+        document.getElementById('articleFormTitle').textContent = 'Редактирование статьи';
+        try {
+            const response = await axios.get(`/api/articles/${articleId}`);
+            if (response.data.success) {
+                const a = response.data.data;
+                document.getElementById('articleId').value = a.id;
+                document.getElementById('articleTitle').value = a.title;
+                const selectedIds = (a.sections || []).map(s => s.id);
+                renderSectionCheckboxes(selectedIds);
+                // Ждём инициализации TinyMCE перед вставкой контента
+                tinymce.get('articleContent')?.on('init', () => {
+                    tinymce.get('articleContent').setContent(a.content || '');
+                });
+                // Если уже инициализирован
+                setTimeout(() => {
+                    const ed = tinymce.get('articleContent');
+                    if (ed && !ed.getContent()) ed.setContent(a.content || '');
+                }, 600);
+            }
+        } catch (err) {
+            showError('Ошибка загрузки статьи');
+        }
+    } else {
+        document.getElementById('articleFormTitle').textContent = 'Новая статья';
+        renderSectionCheckboxes([]);
+    }
+}
+
+function hideArticleForm() {
+    document.getElementById('articlesListView').style.display = 'block';
+    document.getElementById('articleFormView').style.display = 'none';
+    try { tinymce.remove('#articleContent'); } catch (e) {}
+    articleTinyMCE = null;
+}
+
+async function saveArticle() {
+    const articleId = document.getElementById('articleId').value;
+    const title = document.getElementById('articleTitle').value.trim();
+    if (!title) { showError('Введите заголовок'); return; }
+
+    const ed = tinymce.get('articleContent');
+    const content = ed ? ed.getContent() : document.getElementById('articleContent').value;
+    const sectionIds = getSelectedSectionIds();
+
+    try {
+        let response;
+        if (articleId) {
+            response = await axios.put(`/api/articles/${articleId}`, { title, content, sectionIds });
+        } else {
+            response = await axios.post('/api/articles', { title, content, sectionIds });
+        }
+        if (response.data.success) {
+            showSuccess('Статья сохранена');
+            hideArticleForm();
+            await loadArticles();
+        } else {
+            showError(response.data.message);
+        }
+    } catch (err) {
+        showError(err.response?.data?.message || 'Ошибка сохранения статьи');
+    }
+}
+
+async function deleteArticle(id) {
+    if (!confirm('Удалить статью?')) return;
+    try {
+        await axios.delete(`/api/articles/${id}`);
+        showSuccess('Статья удалена');
+        await loadArticles();
+    } catch (err) {
+        showError(err.response?.data?.message || 'Ошибка удаления статьи');
+    }
+}

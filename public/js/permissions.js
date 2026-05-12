@@ -128,6 +128,8 @@ const PermissionsManager = {
                 return this.has('canCreateMaterials');
             case 'history-section':
                 return this.has('canViewLogs');
+            case 'articles':
+                return this.has('canReadArticles') || this.has('canCreateArticles');
             default:
                 return false;
         }

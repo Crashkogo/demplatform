@@ -44,6 +44,7 @@ async function initializeApp() {
 
         // Инициализируем остальные компоненты приложения.
         initializeEventListeners();
+        initModeSwitcher();
         await loadCategories();
         await loadMaterials();
         setupFuseSearch();
@@ -2560,3 +2561,117 @@ function addPDFDragHandlers(container) {
         }
     });
 } 
+
+// ============================================================
+// ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМА МАТЕРИАЛЫ / СТАТЬИ
+// ============================================================
+
+let currentAppMode = 'materials';
+let currentArticlesTab = 'list';
+
+function initModeSwitcher() {
+    const canReadArticles = PermissionsManager.has('canReadArticles') || PermissionsManager.has('canCreateArticles');
+    if (canReadArticles) {
+        const switcher = document.getElementById('modeSwitcher');
+        if (switcher) switcher.style.display = '';
+    }
+}
+
+function switchMode(mode) {
+    currentAppMode = mode;
+    const materialsMode = document.getElementById('materialsMode');
+    const articlesMode = document.getElementById('articlesMode');
+    const materialsBtn = document.getElementById('modeMaterilaBtn');
+    const articlesBtn = document.getElementById('modeArticlesBtn');
+
+    if (mode === 'articles') {
+        if (materialsMode) materialsMode.style.display = 'none';
+        if (articlesMode) articlesMode.style.display = 'block';
+        if (materialsBtn) materialsBtn.classList.remove('active');
+        if (articlesBtn) articlesBtn.classList.add('active');
+        loadAppArticles();
+    } else {
+        if (materialsMode) materialsMode.style.display = '';
+        if (articlesMode) articlesMode.style.display = 'none';
+        if (materialsBtn) materialsBtn.classList.add('active');
+        if (articlesBtn) articlesBtn.classList.remove('active');
+    }
+}
+
+function switchArticlesTab(tab) {
+    currentArticlesTab = tab;
+    const listTab = document.getElementById('articlesListTab');
+    const proTab = document.getElementById('proReviewTab');
+    const listBtn = document.getElementById('articlesTabBtn');
+    const proBtn = document.getElementById('proReviewTabBtn');
+
+    if (tab === 'list') {
+        if (listTab) listTab.style.display = '';
+        if (proTab) proTab.style.display = 'none';
+        if (listBtn) listBtn.classList.add('active');
+        if (proBtn) proBtn.classList.remove('active');
+    } else {
+        if (listTab) listTab.style.display = 'none';
+        if (proTab) proTab.style.display = '';
+        if (listBtn) listBtn.classList.remove('active');
+        if (proBtn) proBtn.classList.add('active');
+    }
+}
+
+function toggleProTitle() {
+    const toggle = document.getElementById('proTitleToggle');
+    const field = document.getElementById('proTitleField');
+    if (field) field.style.display = toggle.checked ? 'block' : 'none';
+}
+
+async function loadAppArticles() {
+    const container = document.getElementById('appArticlesList');
+    if (!container) return;
+    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
+
+    try {
+        const params = {};
+        const search = document.getElementById('articleSearchInput')?.value?.trim();
+        const dateFrom = document.getElementById('articleDateFrom')?.value;
+        const dateTo = document.getElementById('articleDateTo')?.value;
+        if (search) params.search = search;
+        if (dateFrom) params.dateFrom = dateFrom;
+        if (dateTo) params.dateTo = dateTo;
+
+        const response = await axios.get('/api/articles', { params });
+
+        if (response.data.success) {
+            renderAppArticles(response.data.data);
+        } else {
+            container.innerHTML = '<div class="alert alert-danger">Ошибка загрузки статей</div>';
+        }
+    } catch (err) {
+        container.innerHTML = '<div class="alert alert-danger">Ошибка загрузки статей</div>';
+    }
+}
+
+function renderAppArticles(articles) {
+    const container = document.getElementById('appArticlesList');
+    if (!container) return;
+    if (articles.length === 0) {
+        container.innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-newspaper display-4 d-block mb-3"></i>Статьи не найдены</div>';
+        return;
+    }
+    container.innerHTML = articles.map(a => {
+        const date = new Date(a.createdAt).toLocaleDateString('ru-RU');
+        const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${s.name}</span>`).join('');
+        const preview = (a.content || '').replace(/<[^>]*>/g, '').substring(0, 200);
+        return `
+            <div class="card mb-3 border-0 shadow-sm" style="border-left: 4px solid #667eea !important;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <h5 class="mb-0">${a.title}</h5>
+                        <small class="text-muted ms-3 text-nowrap">${date}</small>
+                    </div>
+                    <div class="mb-2">${sections}</div>
+                    <p class="text-muted mb-0 small">${preview}${preview.length >= 200 ? '...' : ''}</p>
+                </div>
+            </div>
+        `;
+    }).join('');
+}

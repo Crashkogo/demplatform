@@ -378,6 +378,12 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="#" data-section="articles-section">
+                                <i class="bi bi-newspaper me-2"></i>
+                                Статьи
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="#" data-section="history-section">
                                 <i class="bi bi-clock-history me-2"></i>
                                 История
@@ -706,6 +712,99 @@
                         </form>
                     </div>
 
+                    <!-- Статьи -->
+                    <div id="articles-section" class="content-section">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h2>
+                                <i class="bi bi-newspaper me-2 text-primary"></i>
+                                Статьи
+                            </h2>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-secondary" id="manageSectionsBtn">
+                                    <i class="bi bi-tags me-1"></i>Разделы
+                                </button>
+                                <button class="btn btn-primary" id="addArticleBtn">
+                                    <i class="bi bi-plus-circle me-2"></i>Новая статья
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Список статей -->
+                        <div id="articlesListView">
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Заголовок</th>
+                                            <th>Разделы</th>
+                                            <th>Автор</th>
+                                            <th>Дата</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="articlesTableBody">
+                                        <tr><td colspan="5" class="text-center"><div class="spinner-border" role="status"></div></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Форма создания/редактирования статьи -->
+                        <div id="articleFormView" style="display:none;">
+                            <div class="d-flex align-items-center mb-3">
+                                <button class="btn btn-outline-secondary me-3" id="backToArticlesBtn">
+                                    <i class="bi bi-arrow-left me-1"></i>Назад
+                                </button>
+                                <h4 class="mb-0" id="articleFormTitle">Новая статья</h4>
+                            </div>
+                            <form id="articleForm">
+                                <input type="hidden" id="articleId">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Заголовок *</label>
+                                    <input type="text" class="form-control" id="articleTitle" required placeholder="Введите заголовок статьи">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Разделы</label>
+                                    <div id="articleSectionsCheckboxes" class="border rounded p-3 d-flex flex-wrap gap-3">
+                                        <span class="text-muted">Загрузка разделов...</span>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Текст статьи</label>
+                                    <textarea id="articleContent"></textarea>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-primary" id="saveArticleBtn">
+                                        <i class="bi bi-save me-1"></i>Сохранить
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" id="cancelArticleBtn">Отмена</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Модальное окно управления разделами -->
+                    <div class="modal fade" id="sectionsModal" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Управление разделами</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="d-flex gap-2 mb-3">
+                                        <input type="text" class="form-control" id="newSectionName" placeholder="Название нового раздела">
+                                        <button class="btn btn-primary" id="addSectionBtn">Добавить</button>
+                                    </div>
+                                    <ul class="list-group" id="sectionsList"></ul>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- История действий -->
                     <div id="history-section" class="content-section">
                         <h2 class="mb-4">
@@ -933,6 +1032,27 @@
 
                         <hr>
 
+                        <!-- Права на статьи -->
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <h6>Доступ к статьям</h6>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canReadArticles">
+                                    <label class="form-check-label" for="canReadArticles">Чтение статей</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="canCreateArticles">
+                                    <label class="form-check-label" for="canCreateArticles">Создание / редактирование</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
                         <!-- Доступ к категориям -->
                         <h5 class="mb-3">Доступ к категориям</h5>
 
@@ -1051,6 +1171,9 @@
     <script src="/libs/dropzone/dropzone.min.js"></script>
     <!-- jsTree -->
     <script src="/libs/jstree/jstree.min.js"></script>
+
+    <!-- TinyMCE (self-hosted) -->
+    <script src="/libs/tinymce/tinymce.min.js" referrerpolicy="origin"></script>
 
     <script src="js/permissions.js"></script>
     <script src="js/admin.js"></script>
