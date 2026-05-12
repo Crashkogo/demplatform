@@ -1011,10 +1011,11 @@ function updateStats() {
         document: materials.filter(m => m.fileType === 'document').length
     };
 
-    document.getElementById('totalMaterials').textContent = stats.total;
-    document.getElementById('videoCount').textContent = stats.video;
-    document.getElementById('imageCount').textContent = stats.image;
-    document.getElementById('documentCount').textContent = stats.document;
+    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setEl('totalMaterials', stats.total);
+    setEl('videoCount', stats.video);
+    setEl('imageCount', stats.image);
+    setEl('documentCount', stats.document);
 }
 
 // Показ/скрытие лоадера
@@ -2574,6 +2575,28 @@ function initModeSwitcher() {
     if (canReadArticles) {
         const switcher = document.getElementById('modeSwitcher');
         if (switcher) switcher.style.display = '';
+    }
+
+    const matBtn = document.getElementById('modeMaterilaBtn');
+    const artBtn = document.getElementById('modeArticlesBtn');
+    if (matBtn) matBtn.addEventListener('click', () => switchMode('materials'));
+    if (artBtn) artBtn.addEventListener('click', () => switchMode('articles'));
+
+    const listTabBtn = document.getElementById('articlesTabBtn');
+    const proTabBtn = document.getElementById('proReviewTabBtn');
+    if (listTabBtn) listTabBtn.addEventListener('click', (e) => { e.preventDefault(); switchArticlesTab('list'); });
+    if (proTabBtn) proTabBtn.addEventListener('click', (e) => { e.preventDefault(); switchArticlesTab('pro'); });
+
+    const proToggle = document.getElementById('proTitleToggle');
+    if (proToggle) proToggle.addEventListener('change', toggleProTitle);
+
+    const searchBtn = document.querySelector('#articlesListTab .btn-outline-primary');
+    if (searchBtn) searchBtn.addEventListener('click', loadAppArticles);
+
+    const searchInput = document.getElementById('articleSearchInput');
+    if (searchInput) {
+        let timer;
+        searchInput.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(loadAppArticles, 400); });
     }
 }
 
