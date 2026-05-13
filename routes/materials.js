@@ -14,6 +14,19 @@ const config = require('../config');
 
 const router = express.Router();
 
+// Multer может отдавать originalname как Latin-1 байты вместо UTF-8.
+// Если строка состоит только из Latin-1 символов и байты образуют валидный UTF-8 — исправляем.
+function fixOriginalName(name) {
+    if (!name) return name;
+    if ([...name].every(c => c.charCodeAt(0) < 256)) {
+        try {
+            const decoded = Buffer.from(name, 'latin1').toString('utf8');
+            if (decoded !== name && !decoded.includes('\uFFFD')) return decoded;
+        } catch (e) {}
+    }
+    return name;
+}
+
 // Проверка что путь к файлу находится внутри папки uploads (защита от path traversal)
 const uploadsRoot = path.resolve(config.uploadsPath);
 function isSafeFilePath(filePath) {
@@ -570,7 +583,7 @@ router.post('/', [uploadLimiter, authenticateToken, checkAccess('canCreateMateri
             title,
             description,
             filename: req.file.filename,
-            originalName: req.file.originalname,
+            originalName: fixOriginalName(req.file.originalname),
             filePath: req.file.path,
             fileSize: req.file.size,
             mimeType: normalizedMime,

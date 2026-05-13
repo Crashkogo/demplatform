@@ -53,7 +53,7 @@ const canCreate = (req, res, next) => {
 // GET /api/article-sections
 router.get('/article-sections', authenticateToken, canRead, async (req, res) => {
     try {
-        const sections = await ArticleSection.findAll({ order: [['name', 'ASC']] });
+        const sections = await ArticleSection.findAll({ order: [['sortOrder', 'ASC'], ['name', 'ASC']] });
         res.json({ success: true, data: sections });
     } catch (err) {
         logger.error('GET /article-sections:', err);
@@ -64,11 +64,11 @@ router.get('/article-sections', authenticateToken, canRead, async (req, res) => 
 // POST /api/article-sections
 router.post('/article-sections', authenticateToken, canCreate, async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, sortOrder } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, message: 'Название обязательно' });
         }
-        const section = await ArticleSection.create({ name: name.trim() });
+        const section = await ArticleSection.create({ name: name.trim(), sortOrder: sortOrder ?? 0 });
         res.status(201).json({ success: true, data: section });
     } catch (err) {
         logger.error('POST /article-sections:', err);
@@ -81,11 +81,13 @@ router.put('/article-sections/:id', authenticateToken, canCreate, async (req, re
     try {
         const section = await ArticleSection.findByPk(req.params.id);
         if (!section) return res.status(404).json({ success: false, message: 'Раздел не найден' });
-        const { name } = req.body;
+        const { name, sortOrder } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ success: false, message: 'Название обязательно' });
         }
-        await section.update({ name: name.trim() });
+        const upd = { name: name.trim() };
+        if (sortOrder !== undefined) upd.sortOrder = parseInt(sortOrder, 10);
+        await section.update(upd);
         res.json({ success: true, data: section });
     } catch (err) {
         logger.error('PUT /article-sections/:id:', err);
@@ -120,12 +122,12 @@ router.get('/articles', authenticateToken, canRead, async (req, res) => {
             where.title = { [Op.iLike]: `%${search}%` };
         }
         if (dateFrom || dateTo) {
-            where.createdAt = {};
-            if (dateFrom) where.createdAt[Op.gte] = new Date(dateFrom);
+            where.publishedAt = {};
+            if (dateFrom) where.publishedAt[Op.gte] = new Date(dateFrom);
             if (dateTo) {
                 const to = new Date(dateTo);
                 to.setHours(23, 59, 59, 999);
-                where.createdAt[Op.lte] = to;
+                where.publishedAt[Op.lte] = to;
             }
         }
 
@@ -142,7 +144,7 @@ router.get('/articles', authenticateToken, canRead, async (req, res) => {
         const articles = await Article.findAll({
             where,
             include,
-            order: [['createdAt', 'DESC']]
+            order: [['publishedAt', 'DESC']]
         });
 
         res.json({ success: true, data: articles });
@@ -172,14 +174,15 @@ router.get('/articles/:id', authenticateToken, canRead, async (req, res) => {
 // POST /api/articles
 router.post('/articles', authenticateToken, canCreate, async (req, res) => {
     try {
-        const { title, content, sectionIds } = req.body;
+        const { title, content, sectionIds, publishedAt } = req.body;
         if (!title || !title.trim()) {
             return res.status(400).json({ success: false, message: 'Заголовок обязателен' });
         }
         const article = await Article.create({
             title: title.trim(),
             content: content || '',
-            authorId: req.user.id
+            authorId: req.user.id,
+            publishedAt: publishedAt ? new Date(publishedAt) : new Date()
         });
         if (Array.isArray(sectionIds) && sectionIds.length > 0) {
             const sections = await ArticleSection.findAll({ where: { id: sectionIds } });
@@ -204,11 +207,13 @@ router.put('/articles/:id', authenticateToken, canCreate, async (req, res) => {
         const article = await Article.findByPk(req.params.id);
         if (!article) return res.status(404).json({ success: false, message: 'Статья не найдена' });
 
-        const { title, content, sectionIds } = req.body;
+        const { title, content, sectionIds, publishedAt } = req.body;
         if (!title || !title.trim()) {
             return res.status(400).json({ success: false, message: 'Заголовок обязателен' });
         }
-        await article.update({ title: title.trim(), content: content || '' });
+        const updateData = { title: title.trim(), content: content || '' };
+        if (publishedAt) updateData.publishedAt = new Date(publishedAt);
+        await article.update(updateData);
 
         if (Array.isArray(sectionIds)) {
             const sections = await ArticleSection.findAll({ where: { id: sectionIds } });

@@ -13,6 +13,12 @@ ArticleSection.init({
         type: DataTypes.STRING(200),
         allowNull: false,
         validate: { notEmpty: true, len: [1, 200] }
+    },
+    sortOrder: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+        field: 'sort_order'
     }
 }, {
     sequelize,

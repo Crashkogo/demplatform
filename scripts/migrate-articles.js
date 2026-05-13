@@ -14,11 +14,24 @@ async function migrate() {
             CREATE TABLE IF NOT EXISTS article_sections (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(200) NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
         `, { transaction: t });
         console.log('OK article_sections');
+
+        // 1a. sort_order — для существующих таблиц article_sections
+        const secCols = await sequelize.query(`
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'article_sections' AND column_name = 'sort_order';
+        `, { type: QueryTypes.SELECT, transaction: t });
+        if (secCols.length === 0) {
+            await sequelize.query(`ALTER TABLE article_sections ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;`, { transaction: t });
+            console.log('OK article_sections.sort_order');
+        } else {
+            console.log('SKIP article_sections.sort_order (already exists)');
+        }
 
         // 2. articles
         await sequelize.query(`
@@ -27,11 +40,27 @@ async function migrate() {
                 title VARCHAR(500) NOT NULL,
                 content TEXT NOT NULL DEFAULT '',
                 author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                published_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             );
         `, { transaction: t });
         console.log('OK articles');
+
+        // 2a. published_at — для существующих таблиц articles
+        const artCols = await sequelize.query(`
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'articles' AND column_name = 'published_at';
+        `, { type: QueryTypes.SELECT, transaction: t });
+        if (artCols.length === 0) {
+            await sequelize.query(`
+                ALTER TABLE articles ADD COLUMN published_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+                UPDATE articles SET published_at = created_at WHERE published_at IS NULL;
+            `, { transaction: t });
+            console.log('OK articles.published_at');
+        } else {
+            console.log('SKIP articles.published_at (already exists)');
+        }
 
         // 3. article_section_assignments (M2M)
         await sequelize.query(`

@@ -1059,6 +1059,24 @@ async function logout() {
 }
 
 // Функция скачивания материала
+// Исправляет Mojibake: если строка содержит только Latin-1 символы,
+// интерпретирует их как байты UTF-8 и раскодирует в Unicode
+function fixDownloadFilename(str) {
+    if (!str) return str;
+    // Если все символы в диапазоне Latin-1 (< U+0100) — возможно Mojibake
+    if ([...str].every(c => c.charCodeAt(0) < 256)) {
+        try {
+            const bytes = new Uint8Array([...str].map(c => c.charCodeAt(0)));
+            const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+            // Возвращаем только если декодировалось во что-то отличное от оригинала
+            if (decoded !== str) return decoded;
+        } catch (e) {
+            // Не валидный UTF-8 — оставляем как есть
+        }
+    }
+    return str;
+}
+
 async function downloadMaterial(materialId) {
     try {
         console.log('Скачиваем материал:', materialId);
@@ -1077,9 +1095,14 @@ async function downloadMaterial(materialId) {
         let filename = 'downloaded_file';
 
         if (contentDisposition) {
-            const match = contentDisposition.match(/filename="?([^"]+)"?/);
-            if (match) {
-                filename = match[1];
+            // RFC 5987: filename*=UTF-8''encoded_name
+            const rfc5987 = contentDisposition.match(/filename\*=UTF-8''([^;\s]+)/i);
+            if (rfc5987) {
+                filename = fixDownloadFilename(decodeURIComponent(rfc5987[1]));
+            } else {
+                // fallback: filename="name" или filename=name
+                const plain = contentDisposition.match(/filename="?([^";\s]+)"?/);
+                if (plain) filename = fixDownloadFilename(plain[1]);
             }
         }
 
@@ -2681,7 +2704,7 @@ function renderAppArticles(articles) {
         return;
     }
     container.innerHTML = articles.map(a => {
-        const date = new Date(a.createdAt).toLocaleDateString('ru-RU');
+        const date = new Date(a.publishedAt || a.createdAt).toLocaleDateString('ru-RU');
         const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${s.name}</span>`).join('');
         const preview = (a.content || '').replace(/<[^>]*>/g, '').substring(0, 200);
         return `

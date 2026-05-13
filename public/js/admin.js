@@ -1986,12 +1986,61 @@ async function loadArticlesSection() {
     const manageSectionsBtn = document.getElementById('manageSectionsBtn');
     if (addBtn) addBtn.style.display = canCreate ? '' : 'none';
     if (manageSectionsBtn) manageSectionsBtn.style.display = canCreate ? '' : 'none';
+
+    // Блок шапочной картинки — только admins
+    const isAdmin = PermissionsManager.has('isAdmin');
+    const headerSection = document.getElementById('headerImageSection');
+    if (headerSection) headerSection.style.display = isAdmin ? '' : 'none';
+    if (isAdmin) await loadHeaderImage();
+}
+
+async function loadHeaderImage() {
+    try {
+        const response = await axios.get('/api/header-image');
+        const preview = document.getElementById('headerImagePreview');
+        const nameEl = document.getElementById('headerImageName');
+        if (response.data.success && response.data.data) {
+            const img = response.data.data;
+            preview.innerHTML = `<img src="/api/header-image/file/${img.filename}" alt="шапка" style="width:100%;height:100%;object-fit:contain;">`;
+            if (nameEl) nameEl.textContent = img.originalName || img.filename;
+        } else {
+            preview.innerHTML = '<span class="text-muted small">Нет изображения</span>';
+            if (nameEl) nameEl.textContent = '';
+        }
+    } catch (err) {
+        console.error('loadHeaderImage:', err);
+    }
+}
+
+async function uploadHeaderImage() {
+    const input = document.getElementById('headerImageInput');
+    if (!input || !input.files || input.files.length === 0) {
+        showNotification('Выберите файл', 'warning');
+        return;
+    }
+    const formData = new FormData();
+    formData.append('image', input.files[0]);
+    try {
+        const response = await axios.post('/api/header-image', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        if (response.data.success) {
+            showNotification('Картинка шапки обновлена', 'success');
+            input.value = '';
+            await loadHeaderImage();
+        }
+    } catch (err) {
+        showNotification(err.response?.data?.message || 'Ошибка загрузки', 'danger');
+    }
 }
 
 let articleListenersInit = false;
 function initArticleEventListeners() {
     if (articleListenersInit) return;
     articleListenersInit = true;
+
+    const uploadHeaderBtn = document.getElementById('uploadHeaderImageBtn');
+    if (uploadHeaderBtn) uploadHeaderBtn.addEventListener('click', uploadHeaderImage);
 
     document.getElementById('addArticleBtn').addEventListener('click', () => showArticleForm(null));
     document.getElementById('backToArticlesBtn').addEventListener('click', hideArticleForm);
@@ -2050,7 +2099,7 @@ function renderArticles(articles) {
     }
     const canEdit = PermissionsManager.has('canCreateArticles');
     articles.forEach(a => {
-        const date = new Date(a.createdAt).toLocaleDateString('ru-RU');
+        const date = new Date(a.publishedAt || a.createdAt).toLocaleDateString('ru-RU');
         const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${s.name}</span>`).join('');
         const author = a.author ? a.author.login : '—';
         let actions = '';
@@ -2105,14 +2154,36 @@ function renderSectionsList() {
         list.innerHTML = '<li class="list-group-item text-muted">Разделы не созданы</li>';
         return;
     }
-    list.innerHTML = allArticleSections.map(s => `
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            ${s.name}
+    const sorted = [...allArticleSections].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+    list.innerHTML = sorted.map(s => `
+        <li class="list-group-item d-flex align-items-center gap-2">
+            <input type="number" class="form-control form-control-sm text-center section-order-input"
+                data-id="${s.id}" data-name="${s.name.replace(/"/g, '&quot;')}"
+                value="${s.sortOrder ?? 0}" min="0" max="999"
+                style="width:60px;flex-shrink:0;" title="Порядок в DOCX">
+            <span class="flex-grow-1">${s.name}</span>
             <button class="btn btn-sm btn-outline-danger" data-section-action="delete" data-id="${s.id}">
                 <i class="bi bi-trash"></i>
             </button>
         </li>
     `).join('');
+
+    list.querySelectorAll('.section-order-input').forEach(input => {
+        input.addEventListener('change', async () => {
+            const id = input.dataset.id;
+            const name = input.dataset.name;
+            const sortOrder = parseInt(input.value, 10) || 0;
+            try {
+                const response = await axios.put(`/api/article-sections/${id}`, { name, sortOrder });
+                if (response.data.success) {
+                    const sec = allArticleSections.find(s => s.id === parseInt(id));
+                    if (sec) sec.sortOrder = sortOrder;
+                }
+            } catch (err) {
+                showError('Ошибка сохранения порядка');
+            }
+        });
+    });
 }
 
 async function addSection() {
@@ -2173,6 +2244,7 @@ async function showArticleForm(articleId) {
 
     document.getElementById('articleId').value = '';
     document.getElementById('articleTitle').value = '';
+    document.getElementById('articlePublishedAt').value = new Date().toISOString().substring(0, 10);
 
     if (articleId) {
         document.getElementById('articleFormTitle').textContent = 'Редактирование статьи';
@@ -2182,6 +2254,8 @@ async function showArticleForm(articleId) {
                 const a = response.data.data;
                 document.getElementById('articleId').value = a.id;
                 document.getElementById('articleTitle').value = a.title;
+                const pubDate = a.publishedAt ? new Date(a.publishedAt).toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10);
+                document.getElementById('articlePublishedAt').value = pubDate;
                 const selectedIds = (a.sections || []).map(s => s.id);
                 renderSectionCheckboxes(selectedIds);
                 // Ждём инициализации TinyMCE перед вставкой контента
@@ -2212,6 +2286,7 @@ function hideArticleForm() {
     if (contentArea) contentArea.value = '';
     document.getElementById('articleId').value = '';
     document.getElementById('articleTitle').value = '';
+    document.getElementById('articlePublishedAt').value = '';
 }
 
 async function saveArticle() {
@@ -2222,13 +2297,14 @@ async function saveArticle() {
     const ed = tinymce.get('articleContent');
     const content = ed ? ed.getContent() : document.getElementById('articleContent').value;
     const sectionIds = getSelectedSectionIds();
+    const publishedAt = document.getElementById('articlePublishedAt').value || new Date().toISOString().substring(0, 10);
 
     try {
         let response;
         if (articleId) {
-            response = await axios.put(`/api/articles/${articleId}`, { title, content, sectionIds });
+            response = await axios.put(`/api/articles/${articleId}`, { title, content, sectionIds, publishedAt });
         } else {
-            response = await axios.post('/api/articles', { title, content, sectionIds });
+            response = await axios.post('/api/articles', { title, content, sectionIds, publishedAt });
         }
         if (response.data.success) {
             showSuccess('Статья сохранена');

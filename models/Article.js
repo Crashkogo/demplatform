@@ -23,6 +23,12 @@ Article.init({
         type: DataTypes.INTEGER,
         allowNull: true,
         field: 'author_id'
+    },
+    publishedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        defaultValue: DataTypes.NOW,
+        field: 'published_at'
     }
 }, {
     sequelize,
