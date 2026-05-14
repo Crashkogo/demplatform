@@ -34,11 +34,11 @@ const noTableBorder = {
     insideVertical: { style: BorderStyle.NONE, size: 0, color: 'auto' },
 };
 
-// Таблица колонтитула: № слева, дата справа, рамка вокруг
-// Используем границы на ячейках (не на таблице) — cell border имеет приоритет над table border
+// Таблица колонтитула: № слева, дата справа, рамка + серый фон
 function makeIssueTable(issueNum, dateStr) {
     const outerV = { style: BorderStyle.SINGLE, size: 12, color: '000000' };
     const noB = { style: BorderStyle.NONE, size: 0, color: 'auto' };
+    const shading = { type: ShadingType.SOLID, color: 'CCCCCC', fill: 'CCCCCC' };
     return new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
         borders: noTableBorder,
@@ -47,6 +47,7 @@ function makeIssueTable(issueNum, dateStr) {
                 children: [
                     new TableCell({
                         borders: { top: outerV, bottom: outerV, left: outerV, right: noB },
+                        shading,
                         margins: { top: 60, bottom: 60, left: 120, right: 60 },
                         children: [new Paragraph({
                             children: [new TextRun({ text: `№ ${issueNum} НОВОСТИ ЗАКОНОДАТЕЛЬСТВА`, bold: true, size: 18 })],
@@ -56,6 +57,7 @@ function makeIssueTable(issueNum, dateStr) {
                     }),
                     new TableCell({
                         borders: { top: outerV, bottom: outerV, left: noB, right: outerV },
+                        shading,
                         margins: { top: 60, bottom: 60, left: 60, right: 120 },
                         children: [new Paragraph({
                             children: [new TextRun({ text: dateStr, bold: true, size: 18 })],
@@ -69,14 +71,15 @@ function makeIssueTable(issueNum, dateStr) {
     });
 }
 
-// Футер: таблица с верхней рамкой (граница на ячейке, не на таблице)
+// Футер: таблица с рамкой со всех сторон + серый фон
 function makeFooter() {
-    const topBorderOnly = {
+    const allSides = {
         top: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
-        bottom: { style: BorderStyle.NONE, size: 0, color: 'auto' },
-        left: { style: BorderStyle.NONE, size: 0, color: 'auto' },
-        right: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+        bottom: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
+        left: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
+        right: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
     };
+    const shading = { type: ShadingType.SOLID, color: 'CCCCCC', fill: 'CCCCCC' };
     return new Footer({
         children: [
             new Table({
@@ -86,7 +89,8 @@ function makeFooter() {
                     new TableRow({
                         children: [
                             new TableCell({
-                                borders: topBorderOnly,
+                                borders: allSides,
+                                shading,
                                 margins: { top: 60, bottom: 60, left: 60, right: 60 },
                                 children: [new Paragraph({
                                     children: [new TextRun({
@@ -104,36 +108,42 @@ function makeFooter() {
     });
 }
 
-// Статья в рамке: заголовок (серый фон, курсив, 9pt) + контент
-// Граница на ячейке — cell border имеет приоритет
-function makeArticleBox(titleText, contentParas) {
-    const titlePara = new Paragraph({
-        children: [new TextRun({ text: titleText, size: 18, italics: true })],
-        alignment: AlignmentType.CENTER,
-        shading: { type: ShadingType.SOLID, color: 'D9D9D9', fill: 'D9D9D9' },
-        spacing: { before: 40, after: 40 },
+// Все статьи раздела в одной таблице.
+// Рамки задаём на уровне TABLE (outer + insideHorizontal) — ячейки без explicit borders,
+// чтобы не перекрывать table-level границы. Это даёт единую таблицу с разделителями.
+function makeSectionArticlesTable(articles) {
+    const side = { style: BorderStyle.SINGLE, size: 8, color: '000000' };
+    const noB = { style: BorderStyle.NONE, size: 0, color: 'auto' };
+
+    const rows = articles.map((article) => {
+        const titlePara = new Paragraph({
+            children: [new TextRun({ text: article.title, size: 18, italics: true })],
+            alignment: AlignmentType.CENTER,
+            shading: { type: ShadingType.SOLID, color: 'D9D9D9', fill: 'D9D9D9' },
+            spacing: { before: 40, after: 40 },
+        });
+        const contentParas = htmlToDocxParagraphs(article.content, { size: 20 });
+        return new TableRow({
+            children: [
+                new TableCell({
+                    margins: { top: 60, bottom: 60, left: 80, right: 80 },
+                    children: [titlePara, ...contentParas],
+                }),
+            ],
+        });
     });
 
-    const allSides = {
-        top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-        bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-        left: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-        right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-    };
     return new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
-        borders: noTableBorder,
-        rows: [
-            new TableRow({
-                children: [
-                    new TableCell({
-                        borders: allSides,
-                        margins: { top: 60, bottom: 60, left: 80, right: 80 },
-                        children: [titlePara, ...contentParas],
-                    }),
-                ],
-            }),
-        ],
+        borders: {
+            top: side,
+            bottom: side,
+            left: side,
+            right: side,
+            insideHorizontal: side,
+            insideVertical: noB,
+        },
+        rows,
     });
 }
 
@@ -198,6 +208,26 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
         // Тело документа
         const bodyChildren = [];
 
+        // Заголовок выпуска — первый элемент тела (под шапкой первой страницы)
+        if (title && title.trim()) {
+            bodyChildren.push(new Paragraph({
+                children: [new TextRun({
+                    text: title.trim().toUpperCase(),
+                    bold: true,
+                    size: 40,
+                    font: 'Comic Sans MS',
+                })],
+                alignment: AlignmentType.CENTER,
+                border: {
+                    top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    left: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                },
+                spacing: { before: 60, after: 80 },
+            }));
+        }
+
         for (const section of allSections) {
             const arts = sectionArticles.get(section.id) || [];
             if (arts.length === 0) continue;
@@ -210,7 +240,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
                     font: 'Comic Sans MS',
                 })],
                 shading: { type: ShadingType.SOLID, color: 'CCCCCC', fill: 'CCCCCC' },
-                spacing: { before: 100, after: 60 },
+                spacing: { before: 100, after: 0 },
                 border: {
                     top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
                     bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
@@ -218,29 +248,23 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
                     right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
                 },
             }));
-
-            for (const article of arts) {
-                bodyChildren.push(makeArticleBox(article.title, htmlToDocxParagraphs(article.content, { size: 20 })));
-                bodyChildren.push(new Paragraph({ children: [], spacing: { after: 60 } }));
-            }
+            bodyChildren.push(makeSectionArticlesTable(arts));
+            bodyChildren.push(new Paragraph({ children: [], spacing: { after: 80 } }));
         }
 
         if (noSectionArticles.length > 0) {
-            for (const article of noSectionArticles) {
-                bodyChildren.push(makeArticleBox(article.title, htmlToDocxParagraphs(article.content, { size: 20 })));
-                bodyChildren.push(new Paragraph({ children: [], spacing: { after: 60 } }));
-            }
+            bodyChildren.push(makeSectionArticlesTable(noSectionArticles));
+            bodyChildren.push(new Paragraph({ children: [], spacing: { after: 80 } }));
         }
 
-        if (bodyChildren.length === 0) {
+        if (bodyChildren.length === 0 || (bodyChildren.length === 1 && title && title.trim())) {
             bodyChildren.push(new Paragraph({
                 children: [new TextRun({ text: 'Статьи за выбранный период не найдены.', size: 20 })],
             }));
         }
 
-        // Первая страница: логотип + [заголовок выпуска] + таблица-колонтитул
-        // Заголовок помещаем в first-page header — не нужны CONTINUOUS-секции,
-        // статьи начинаются сразу на стр.1 в 2-колоночном потоке.
+        // Первая страница: логотип + таблица-колонтитул
+        // Заголовок выпуска перенесён в тело документа
         const firstHeaderChildren = [];
         if (headerImageBuffer) {
             firstHeaderChildren.push(new Paragraph({
@@ -255,31 +279,12 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
         }
         firstHeaderChildren.push(makeIssueTable(issueNumber, issueDateStr));
 
-        if (title && title.trim()) {
-            firstHeaderChildren.push(new Paragraph({
-                children: [new TextRun({
-                    text: title.trim().toUpperCase(),
-                    bold: true,
-                    size: 40,
-                    font: 'Comic Sans MS',
-                })],
-                alignment: AlignmentType.CENTER,
-                border: {
-                    top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                    bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                    left: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                    right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                },
-                spacing: { before: 80, after: 80 },
-            }));
-        }
-
         const pageSize = { width: mm(210), height: mm(297) };
         const commonMargin = { right: mm(15), bottom: mm(20), left: mm(15), header: mm(8), footer: mm(10) };
 
-        // Стр.1: лого(~35мм) + таблица(~12мм) + [заголовок(~20мм)] + отступ
+        // Стр.1: лого(~26мм) + таблица(~12мм) + отступ ≈ 50мм
         // Одна секция → все страницы имеют одинаковый top-margin
-        const topPage1 = title && title.trim() ? mm(75) : mm(55);
+        const topPage1 = mm(50);
 
         const docSections = [{
             properties: {
