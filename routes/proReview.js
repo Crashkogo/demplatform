@@ -8,7 +8,7 @@ const { Op } = require('sequelize');
 const {
     Document, Paragraph, TextRun, Header, Footer, ImageRun,
     AlignmentType, BorderStyle, ShadingType, Packer,
-    Table, TableRow, TableCell, WidthType, SectionType,
+    Table, TableRow, TableCell, WidthType,
 } = require('docx');
 
 const { Article, ArticleSection, HeaderImage, User } = require('../models');
@@ -259,22 +259,10 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
         }
         firstHeaderChildren.push(makeIssueTable(issueNumber, issueDateStr));
 
-        const pageSize = { width: mm(210), height: mm(297) };
-        const commonMargin = { right: mm(15), bottom: mm(20), left: mm(15), header: mm(8), footer: mm(10) };
-
-        // top стр.1: лого(~24мм) + issue(~12мм) + отступ от header(8мм) = ~47мм
-        // top стр.2+: issue(~12мм) + 8мм = ~20мм, но одна секция → тот же top для всех стр.
-        // Компромисс: mm(47) для без-заголовка, mm(65) для с-заголовком (доп. ~18мм на title)
-        const topNoTitle = mm(47);
-        const topWithTitle = mm(65);
-
-        let docSections;
+        // Заголовок выпуска — в first-page header (единственный рабочий способ сделать
+        // full-width заголовок + статьи на стр.1; CONTINUOUS+смена колонок = broken в docx)
         if (title && title.trim()) {
-            // Попытка CONTINUOUS: секция 1 (1-кол, title) + секция 2 (2-кол, статьи).
-            // titlePage и шапки — ТОЛЬКО на секции 2. По OOXML, свойства страницы берутся
-            // из последней секции, стартующей на данной странице. При CONTINUOUS секция 2
-            // стартует на той же стр.1, поэтому шапка стр.1 — это first-шапка секции 2.
-            const titlePara = new Paragraph({
+            firstHeaderChildren.push(new Paragraph({
                 children: [new TextRun({
                     text: title.trim().toUpperCase(),
                     bold: true,
@@ -288,47 +276,31 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
                     left: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
                     right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
                 },
-                spacing: { before: 60, after: 80 },
-            });
-            docSections = [
-                {
-                    // Секция 1: 1-кол, CONTINUOUS, без собственных шапок
-                    properties: {
-                        type: SectionType.CONTINUOUS,
-                        page: { size: pageSize, margin: { top: topWithTitle, ...commonMargin } },
-                    },
-                    children: [titlePara],
-                },
-                {
-                    // Секция 2: 2-кол, управляет шапками (titlePage: true)
-                    properties: {
-                        page: { size: pageSize, margin: { top: topWithTitle, ...commonMargin } },
-                        column: { space: mm(5), count: 2, separator: true },
-                        titlePage: true,
-                    },
-                    headers: {
-                        first: new Header({ children: firstHeaderChildren }),
-                        default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
-                    },
-                    footers: { default: makeFooter(), first: makeFooter() },
-                    children: bodyChildren,
-                },
-            ];
-        } else {
-            docSections = [{
-                properties: {
-                    page: { size: pageSize, margin: { top: topNoTitle, ...commonMargin } },
-                    column: { space: mm(5), count: 2, separator: true },
-                    titlePage: true,
-                },
-                headers: {
-                    first: new Header({ children: firstHeaderChildren }),
-                    default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
-                },
-                footers: { default: makeFooter(), first: makeFooter() },
-                children: bodyChildren,
-            }];
+                spacing: { before: 60, after: 60 },
+            }));
         }
+
+        const pageSize = { width: mm(210), height: mm(297) };
+        const commonMargin = { right: mm(15), bottom: mm(20), left: mm(15), header: mm(8), footer: mm(10) };
+
+        // top = расстояние от верха до текста тела. Должен вместить первостраничную шапку:
+        //   header(8) + logo(~24) + issue(~12) + [title(~20)] + зазор(~3)
+        // Все страницы имеют одинаковый top → стр.2+ имеют лишний отступ (неизбежно).
+        const top = title && title.trim() ? mm(70) : mm(47);
+
+        const docSections = [{
+            properties: {
+                page: { size: pageSize, margin: { top, ...commonMargin } },
+                column: { space: mm(5), count: 2, separator: true },
+                titlePage: true,
+            },
+            headers: {
+                first: new Header({ children: firstHeaderChildren }),
+                default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
+            },
+            footers: { default: makeFooter(), first: makeFooter() },
+            children: bodyChildren,
+        }];
 
         const doc = new Document({ sections: docSections });
         const buffer = await Packer.toBuffer(doc);
