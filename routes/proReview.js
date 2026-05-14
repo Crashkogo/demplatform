@@ -25,30 +25,30 @@ const canGenerate = (req, res, next) => {
     return res.status(403).json({ success: false, message: 'Нет права формирования про-обзора' });
 };
 
-const noBorder = {
+const noCellBorder = {
     top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
     bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
     left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
     right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
 };
 
-// Таблица-заголовок колонтитула: № слева, дата справа, рамка вокруг
+// Таблица колонтитула: № слева, дата справа, рамка вокруг
 function makeIssueTable(issueNum, dateStr) {
     return new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
         borders: {
-            top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-            bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-            left: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-            right: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-            insideH: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-            insideV: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            top: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
+            bottom: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
+            left: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
+            right: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
+            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            insideVertical: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
         },
         rows: [
             new TableRow({
                 children: [
                     new TableCell({
-                        borders: noBorder,
+                        borders: noCellBorder,
                         margins: { top: 60, bottom: 60, left: 120, right: 60 },
                         children: [new Paragraph({
                             children: [new TextRun({ text: `№ ${issueNum} НОВОСТИ ЗАКОНОДАТЕЛЬСТВА`, bold: true, size: 18 })],
@@ -57,7 +57,7 @@ function makeIssueTable(issueNum, dateStr) {
                         width: { size: 65, type: WidthType.PERCENTAGE },
                     }),
                     new TableCell({
-                        borders: noBorder,
+                        borders: noCellBorder,
                         margins: { top: 60, bottom: 60, left: 60, right: 120 },
                         children: [new Paragraph({
                             children: [new TextRun({ text: dateStr, bold: true, size: 18 })],
@@ -71,18 +71,43 @@ function makeIssueTable(issueNum, dateStr) {
     });
 }
 
-function makeFooterPara() {
-    return new Paragraph({
-        children: [new TextRun({
-            text: 'ООО «Инженеры информации», ООО «ЦПИ Эксперт»        тел (8443) 300-800, (8442) 300-800        e-mail: mail@enginf.ru',
-            size: 16,
-        })],
-        alignment: AlignmentType.CENTER,
-        border: { top: { style: BorderStyle.SINGLE, size: 4, color: '000000', space: 4 } },
+// Футер: таблица с верхней рамкой
+function makeFooter() {
+    return new Footer({
+        children: [
+            new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                borders: {
+                    top: { style: BorderStyle.SINGLE, size: 12, color: '000000' },
+                    bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+                    left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+                    right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+                    insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+                    insideVertical: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+                },
+                rows: [
+                    new TableRow({
+                        children: [
+                            new TableCell({
+                                borders: noCellBorder,
+                                margins: { top: 60, bottom: 60, left: 60, right: 60 },
+                                children: [new Paragraph({
+                                    children: [new TextRun({
+                                        text: 'ООО «Инженеры информации», ООО «ЦПИ Эксперт»        тел (8443) 300-800, (8442) 300-800        e-mail: mail@enginf.ru',
+                                        size: 16,
+                                    })],
+                                    alignment: AlignmentType.CENTER,
+                                })],
+                            }),
+                        ],
+                    }),
+                ],
+            }),
+        ],
     });
 }
 
-// Обернуть статью в таблицу с рамкой
+// Статья в рамке: заголовок (серый фон, курсив, 9pt) + контент
 function makeArticleBox(titleText, contentParas) {
     const titlePara = new Paragraph({
         children: [new TextRun({ text: titleText, size: 18, italics: true })],
@@ -94,18 +119,18 @@ function makeArticleBox(titleText, contentParas) {
     return new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
         borders: {
-            top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-            bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-            left: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-            right: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-            insideH: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-            insideV: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+            bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+            left: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+            right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            insideVertical: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
         },
         rows: [
             new TableRow({
                 children: [
                     new TableCell({
-                        borders: noBorder,
+                        borders: noCellBorder,
                         margins: { top: 60, bottom: 60, left: 80, right: 80 },
                         children: [titlePara, ...contentParas],
                     }),
@@ -142,7 +167,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
             }
         }
 
-        // Загрузить статьи
+        // Статьи
         const articles = await Article.findAll({
             where: { publishedAt: { [Op.between]: [dateFromObj, dateToObj] } },
             include: [
@@ -173,14 +198,13 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
             }
         }
 
-        // Построить 2-колоночный контент
+        // Тело документа
         const bodyChildren = [];
 
         for (const section of allSections) {
             const arts = sectionArticles.get(section.id) || [];
             if (arts.length === 0) continue;
 
-            // Заголовок раздела — Comic Sans 14pt, серый, рамка
             bodyChildren.push(new Paragraph({
                 children: [new TextRun({
                     text: section.name.toUpperCase(),
@@ -191,25 +215,22 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
                 shading: { type: ShadingType.SOLID, color: 'CCCCCC', fill: 'CCCCCC' },
                 spacing: { before: 100, after: 60 },
                 border: {
-                    top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-                    bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-                    left: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-                    right: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+                    top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    left: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
                 },
             }));
 
             for (const article of arts) {
-                const contentParas = htmlToDocxParagraphs(article.content, { size: 20 });
-                bodyChildren.push(makeArticleBox(article.title, contentParas));
-                // Пустой параграф между статьями
+                bodyChildren.push(makeArticleBox(article.title, htmlToDocxParagraphs(article.content, { size: 20 })));
                 bodyChildren.push(new Paragraph({ children: [], spacing: { after: 60 } }));
             }
         }
 
         if (noSectionArticles.length > 0) {
             for (const article of noSectionArticles) {
-                const contentParas = htmlToDocxParagraphs(article.content, { size: 20 });
-                bodyChildren.push(makeArticleBox(article.title, contentParas));
+                bodyChildren.push(makeArticleBox(article.title, htmlToDocxParagraphs(article.content, { size: 20 })));
                 bodyChildren.push(new Paragraph({ children: [], spacing: { after: 60 } }));
             }
         }
@@ -220,37 +241,33 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
             }));
         }
 
-        // Колонтитулы
+        // Первая страница: логотип + таблица-колонтитул
         const firstHeaderChildren = [];
         if (headerImageBuffer) {
             firstHeaderChildren.push(new Paragraph({
                 children: [new ImageRun({
                     data: headerImageBuffer,
-                    transformation: { width: 620, height: 130 },
+                    transformation: { width: 620, height: 100 },
                     type: imageType,
                 })],
                 alignment: AlignmentType.CENTER,
-                spacing: { after: 40 },
+                spacing: { after: 30 },
             }));
         }
         firstHeaderChildren.push(makeIssueTable(issueNumber, issueDateStr));
 
-        const pageSettings = {
-            size: { width: mm(210), height: mm(297) },
-            margin: {
-                top: mm(28),
-                right: mm(15),
-                bottom: mm(20),
-                left: mm(15),
-                header: mm(8),
-                footer: mm(8),
-            },
-        };
+        const pageSize = { width: mm(210), height: mm(297) };
+        const commonMargin = { right: mm(15), bottom: mm(20), left: mm(15), header: mm(8), footer: mm(10) };
 
-        const sections = [];
+        // top стр.1: под логотип (100px≈35mm) + таблицу (~12mm) + отступ = 55mm
+        // top стр.2+: только таблица (~12mm) + отступ = 28mm
+        const topPage1 = mm(55);
+        const topOther = mm(28);
+
+        const docSections = [];
 
         if (title && title.trim()) {
-            // Секция 1: заголовок во всю ширину (1 колонка)
+            // Секция 1: 1 колонка, CONTINUOUS → заголовок занимает обе колонки (по всей ширине)
             const titlePara = new Paragraph({
                 children: [new TextRun({
                     text: title.trim().toUpperCase(),
@@ -268,57 +285,47 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
                 spacing: { before: 80, after: 80 },
             });
 
-            sections.push({
+            docSections.push({
                 properties: {
                     type: SectionType.CONTINUOUS,
-                    page: pageSettings,
+                    page: { size: pageSize, margin: { top: topPage1, ...commonMargin } },
                     titlePage: true,
                 },
                 headers: {
-                    default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
                     first: new Header({ children: firstHeaderChildren }),
+                    default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
                 },
-                footers: {
-                    default: new Footer({ children: [makeFooterPara()] }),
-                    first: new Footer({ children: [makeFooterPara()] }),
-                },
+                footers: { default: makeFooter(), first: makeFooter() },
                 children: [titlePara],
             });
 
-            // Секция 2: 2 колонки (наследует заголовки)
-            sections.push({
+            // Секция 2: 2 колонки
+            docSections.push({
                 properties: {
-                    type: SectionType.CONTINUOUS,
+                    page: { size: pageSize, margin: { top: topOther, ...commonMargin } },
                     column: { space: mm(5), count: 2, separator: true },
                 },
-                headers: {
-                    default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
-                },
-                footers: {
-                    default: new Footer({ children: [makeFooterPara()] }),
-                },
+                headers: { default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }) },
+                footers: { default: makeFooter() },
                 children: bodyChildren,
             });
         } else {
-            sections.push({
+            docSections.push({
                 properties: {
-                    page: pageSettings,
+                    page: { size: pageSize, margin: { top: topPage1, ...commonMargin } },
                     column: { space: mm(5), count: 2, separator: true },
                     titlePage: true,
                 },
                 headers: {
-                    default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
                     first: new Header({ children: firstHeaderChildren }),
+                    default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
                 },
-                footers: {
-                    default: new Footer({ children: [makeFooterPara()] }),
-                    first: new Footer({ children: [makeFooterPara()] }),
-                },
+                footers: { default: makeFooter(), first: makeFooter() },
                 children: bodyChildren,
             });
         }
 
-        const doc = new Document({ sections });
+        const doc = new Document({ sections: docSections });
         const buffer = await Packer.toBuffer(doc);
         const filename = `Pro-obzor-N${issueNumber}.docx`;
         const encodedName = encodeURIComponent(filename);
