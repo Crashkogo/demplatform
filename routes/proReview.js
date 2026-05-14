@@ -261,13 +261,19 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
 
         const pageSize = { width: mm(210), height: mm(297) };
         const commonMargin = { right: mm(15), bottom: mm(20), left: mm(15), header: mm(8), footer: mm(10) };
-        const top = mm(50); // одинаковый для всех секций — иначе CONTINUOUS даёт разрыв страницы
+
+        // top стр.1: лого(~24мм) + issue(~12мм) + отступ от header(8мм) = ~47мм
+        // top стр.2+: issue(~12мм) + 8мм = ~20мм, но одна секция → тот же top для всех стр.
+        // Компромисс: mm(47) для без-заголовка, mm(65) для с-заголовком (доп. ~18мм на title)
+        const topNoTitle = mm(47);
+        const topWithTitle = mm(65);
 
         let docSections;
         if (title && title.trim()) {
-            // Секция 1: 1-колонка, CONTINUOUS → заголовок на всю ширину
-            // Секция 2: 2-колонки → статьи
-            // Ключ: одинаковый top у обеих секций предотвращает прыжок на стр.2
+            // Попытка CONTINUOUS: секция 1 (1-кол, title) + секция 2 (2-кол, статьи).
+            // titlePage и шапки — ТОЛЬКО на секции 2. По OOXML, свойства страницы берутся
+            // из последней секции, стартующей на данной странице. При CONTINUOUS секция 2
+            // стартует на той же стр.1, поэтому шапка стр.1 — это first-шапка секции 2.
             const titlePara = new Paragraph({
                 children: [new TextRun({
                     text: title.trim().toUpperCase(),
@@ -286,9 +292,18 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
             });
             docSections = [
                 {
+                    // Секция 1: 1-кол, CONTINUOUS, без собственных шапок
                     properties: {
                         type: SectionType.CONTINUOUS,
-                        page: { size: pageSize, margin: { top, ...commonMargin } },
+                        page: { size: pageSize, margin: { top: topWithTitle, ...commonMargin } },
+                    },
+                    children: [titlePara],
+                },
+                {
+                    // Секция 2: 2-кол, управляет шапками (titlePage: true)
+                    properties: {
+                        page: { size: pageSize, margin: { top: topWithTitle, ...commonMargin } },
+                        column: { space: mm(5), count: 2, separator: true },
                         titlePage: true,
                     },
                     headers: {
@@ -296,22 +311,13 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
                         default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
                     },
                     footers: { default: makeFooter(), first: makeFooter() },
-                    children: [titlePara],
-                },
-                {
-                    properties: {
-                        page: { size: pageSize, margin: { top, ...commonMargin } },
-                        column: { space: mm(5), count: 2, separator: true },
-                    },
-                    headers: { default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }) },
-                    footers: { default: makeFooter() },
                     children: bodyChildren,
                 },
             ];
         } else {
             docSections = [{
                 properties: {
-                    page: { size: pageSize, margin: { top, ...commonMargin } },
+                    page: { size: pageSize, margin: { top: topNoTitle, ...commonMargin } },
                     column: { space: mm(5), count: 2, separator: true },
                     titlePage: true,
                 },
