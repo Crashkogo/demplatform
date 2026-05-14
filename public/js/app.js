@@ -2621,6 +2621,85 @@ function initModeSwitcher() {
         let timer;
         searchInput.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(loadAppArticles, 400); });
     }
+
+    // Вкладка Про-обзор — только при наличии права
+    const canProReview = PermissionsManager.has('canGenerateProReview') || PermissionsManager.isAdmin();
+    const proNavItem = document.getElementById('proReviewNavItem');
+    if (!canProReview && proNavItem) {
+        proNavItem.style.display = 'none';
+    }
+
+    if (canProReview) {
+        initProReviewForm();
+    }
+}
+
+function initProReviewForm() {
+    const issueInput = document.getElementById('proIssueNumber');
+    const dateFromInput = document.getElementById('proDateFrom');
+    const dateToInput = document.getElementById('proDateTo');
+    const generateBtn = document.getElementById('generateProBtn');
+
+    function updateBtnState() {
+        const ready = issueInput?.value && dateFromInput?.value && dateToInput?.value;
+        if (generateBtn) generateBtn.disabled = !ready;
+    }
+
+    if (issueInput) issueInput.addEventListener('input', updateBtnState);
+    if (dateFromInput) dateFromInput.addEventListener('change', updateBtnState);
+    if (dateToInput) dateToInput.addEventListener('change', updateBtnState);
+
+    if (generateBtn) {
+        generateBtn.addEventListener('click', generateProReview);
+    }
+}
+
+async function generateProReview() {
+    const issueNumber = document.getElementById('proIssueNumber')?.value;
+    const dateFrom = document.getElementById('proDateFrom')?.value;
+    const dateTo = document.getElementById('proDateTo')?.value;
+    const titleToggle = document.getElementById('proTitleToggle');
+    const titleInput = document.getElementById('proTitleInput');
+    const title = (titleToggle?.checked && titleInput?.value.trim()) ? titleInput.value.trim() : '';
+
+    if (!issueNumber || !dateFrom || !dateTo) return;
+
+    const generateBtn = document.getElementById('generateProBtn');
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Формирование...';
+    }
+
+    try {
+        const params = new URLSearchParams({ issueNumber, dateFrom, dateTo });
+        if (title) params.set('title', title);
+
+        const response = await fetch(`/api/pro-review/generate?${params}`, { credentials: 'include' });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ message: 'Ошибка сервера' }));
+            alert('Ошибка: ' + (err.message || response.statusText));
+            return;
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Pro-obzor-N${issueNumber}.docx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        console.error('Ошибка генерации:', err);
+        alert('Ошибка генерации DOCX: ' + err.message);
+    } finally {
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = '<i class="bi bi-file-earmark-word me-2"></i>Сформировать DOCX';
+        }
+    }
 }
 
 function switchMode(mode) {
