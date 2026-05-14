@@ -5,11 +5,10 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
-
 const {
     Document, Paragraph, TextRun, Header, Footer, ImageRun,
     AlignmentType, BorderStyle, ShadingType, Packer,
-    PageBorderDisplay, PageBorderOffsetFrom,
+    Table, TableRow, TableCell, WidthType, SectionType,
 } = require('docx');
 
 const { Article, ArticleSection, HeaderImage, User } = require('../models');
@@ -17,7 +16,6 @@ const { authenticateToken } = require('../middleware/auth');
 const { htmlToDocxParagraphs } = require('../utils/htmlToDocx');
 const logger = require('../utils/logger');
 
-// Перевод миллиметров в единицы DXA (twips): 1 мм ≈ 56.69 twips
 const mm = (val) => Math.round(val * 56.69);
 
 const canGenerate = (req, res, next) => {
@@ -27,14 +25,49 @@ const canGenerate = (req, res, next) => {
     return res.status(403).json({ success: false, message: 'Нет права формирования про-обзора' });
 };
 
-function makeIssuePara(text) {
-    return new Paragraph({
-        children: [new TextRun({ text, bold: true, size: 18 })],
-        alignment: AlignmentType.CENTER,
-        border: {
-            bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000', space: 4 },
+const noBorder = {
+    top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+    bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+    left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+    right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+};
+
+// Таблица-заголовок колонтитула: № слева, дата справа, рамка вокруг
+function makeIssueTable(issueNum, dateStr) {
+    return new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+            top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+            bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+            left: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+            right: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+            insideH: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            insideV: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
         },
-        spacing: { after: 60 },
+        rows: [
+            new TableRow({
+                children: [
+                    new TableCell({
+                        borders: noBorder,
+                        margins: { top: 60, bottom: 60, left: 120, right: 60 },
+                        children: [new Paragraph({
+                            children: [new TextRun({ text: `№ ${issueNum} НОВОСТИ ЗАКОНОДАТЕЛЬСТВА`, bold: true, size: 18 })],
+                            alignment: AlignmentType.LEFT,
+                        })],
+                        width: { size: 65, type: WidthType.PERCENTAGE },
+                    }),
+                    new TableCell({
+                        borders: noBorder,
+                        margins: { top: 60, bottom: 60, left: 60, right: 120 },
+                        children: [new Paragraph({
+                            children: [new TextRun({ text: dateStr, bold: true, size: 18 })],
+                            alignment: AlignmentType.RIGHT,
+                        })],
+                        width: { size: 35, type: WidthType.PERCENTAGE },
+                    }),
+                ],
+            }),
+        ],
     });
 }
 
@@ -45,9 +78,40 @@ function makeFooterPara() {
             size: 16,
         })],
         alignment: AlignmentType.CENTER,
-        border: {
-            top: { style: BorderStyle.SINGLE, size: 4, color: '000000', space: 4 },
+        border: { top: { style: BorderStyle.SINGLE, size: 4, color: '000000', space: 4 } },
+    });
+}
+
+// Обернуть статью в таблицу с рамкой
+function makeArticleBox(titleText, contentParas) {
+    const titlePara = new Paragraph({
+        children: [new TextRun({ text: titleText, size: 18, italics: true })],
+        alignment: AlignmentType.CENTER,
+        shading: { type: ShadingType.SOLID, color: 'D9D9D9', fill: 'D9D9D9' },
+        spacing: { before: 40, after: 40 },
+    });
+
+    return new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+            top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+            bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+            left: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+            right: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+            insideH: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            insideV: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
         },
+        rows: [
+            new TableRow({
+                children: [
+                    new TableCell({
+                        borders: noBorder,
+                        margins: { top: 60, bottom: 60, left: 80, right: 80 },
+                        children: [titlePara, ...contentParas],
+                    }),
+                ],
+            }),
+        ],
     });
 }
 
@@ -55,21 +119,15 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
     try {
         const { issueNumber, dateFrom, dateTo, title } = req.query;
         if (!issueNumber || !dateFrom || !dateTo) {
-            return res.status(400).json({
-                success: false,
-                message: 'issueNumber, dateFrom, dateTo обязательны',
-            });
+            return res.status(400).json({ success: false, message: 'issueNumber, dateFrom, dateTo обязательны' });
         }
 
         const dateFromObj = new Date(dateFrom);
         const dateToObj = new Date(dateTo);
         dateToObj.setHours(23, 59, 59, 999);
 
-        const fmtDate = (d) =>
-            d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-
-        const issueLineText =
-            `№ ${issueNumber} НОВОСТИ ЗАКОНОДАТЕЛЬСТВА    с ${fmtDate(dateFromObj)} по ${fmtDate(dateToObj)}`;
+        const fmtDate = (d) => d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+        const issueDateStr = `с ${fmtDate(dateFromObj)} по ${fmtDate(dateToObj)}`;
 
         // Шапочное изображение
         let headerImageBuffer = null;
@@ -84,7 +142,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
             }
         }
 
-        // Загрузить статьи за период
+        // Загрузить статьи
         const articles = await Article.findAll({
             where: { publishedAt: { [Op.between]: [dateFromObj, dateToObj] } },
             include: [
@@ -94,21 +152,16 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
             order: [['publishedAt', 'ASC']],
         });
 
-        // Все разделы в нужном порядке
         const allSections = await ArticleSection.findAll({
             order: [['sortOrder', 'ASC'], ['name', 'ASC']],
         });
 
-        // Распределить статьи по разделам
         const sectionArticles = new Map();
         for (const s of allSections) sectionArticles.set(s.id, []);
         const noSectionArticles = [];
-
         for (const article of articles) {
             if (article.sections && article.sections.length > 0) {
-                const sorted = article.sections
-                    .slice()
-                    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+                const sorted = article.sections.slice().sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
                 const firstId = sorted[0].id;
                 if (sectionArticles.has(firstId)) {
                     sectionArticles.get(firstId).push(article);
@@ -120,52 +173,44 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
             }
         }
 
-        // Формирование тела документа
+        // Построить 2-колоночный контент
         const bodyChildren = [];
-
-        if (title && title.trim()) {
-            bodyChildren.push(new Paragraph({
-                children: [new TextRun({ text: title.trim(), bold: true, size: 32, allCaps: true })],
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 120, after: 200 },
-            }));
-        }
 
         for (const section of allSections) {
             const arts = sectionArticles.get(section.id) || [];
             if (arts.length === 0) continue;
 
-            // Заголовок раздела — серый фон, жирный, caps
+            // Заголовок раздела — Comic Sans 14pt, серый, рамка
             bodyChildren.push(new Paragraph({
-                children: [new TextRun({ text: section.name.toUpperCase(), bold: true, size: 22 })],
-                spacing: { before: 160, after: 80 },
+                children: [new TextRun({
+                    text: section.name.toUpperCase(),
+                    bold: true,
+                    size: 28,
+                    font: 'Comic Sans MS',
+                })],
+                shading: { type: ShadingType.SOLID, color: 'CCCCCC', fill: 'CCCCCC' },
+                spacing: { before: 100, after: 60 },
                 border: {
                     top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
                     bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-                },
-                shading: {
-                    type: ShadingType.SOLID,
-                    color: 'CCCCCC',
-                    fill: 'CCCCCC',
+                    left: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+                    right: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
                 },
             }));
 
             for (const article of arts) {
-                bodyChildren.push(new Paragraph({
-                    children: [new TextRun({ text: article.title, bold: true, size: 20 })],
-                    spacing: { before: 80, after: 40 },
-                }));
-                bodyChildren.push(...htmlToDocxParagraphs(article.content, { size: 20 }));
+                const contentParas = htmlToDocxParagraphs(article.content, { size: 20 });
+                bodyChildren.push(makeArticleBox(article.title, contentParas));
+                // Пустой параграф между статьями
+                bodyChildren.push(new Paragraph({ children: [], spacing: { after: 60 } }));
             }
         }
 
         if (noSectionArticles.length > 0) {
             for (const article of noSectionArticles) {
-                bodyChildren.push(new Paragraph({
-                    children: [new TextRun({ text: article.title, bold: true, size: 20 })],
-                    spacing: { before: 80, after: 40 },
-                }));
-                bodyChildren.push(...htmlToDocxParagraphs(article.content, { size: 20 }));
+                const contentParas = htmlToDocxParagraphs(article.content, { size: 20 });
+                bodyChildren.push(makeArticleBox(article.title, contentParas));
+                bodyChildren.push(new Paragraph({ children: [], spacing: { after: 60 } }));
             }
         }
 
@@ -175,53 +220,94 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
             }));
         }
 
-        // Заголовки: первая страница (с логотипом) и остальные
-        const defaultHeaderChildren = [makeIssuePara(issueLineText)];
+        // Колонтитулы
         const firstHeaderChildren = [];
-
         if (headerImageBuffer) {
             firstHeaderChildren.push(new Paragraph({
                 children: [new ImageRun({
                     data: headerImageBuffer,
-                    transformation: { width: 540, height: 90 },
+                    transformation: { width: 620, height: 130 },
                     type: imageType,
                 })],
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 40 },
             }));
         }
-        firstHeaderChildren.push(makeIssuePara(issueLineText));
+        firstHeaderChildren.push(makeIssueTable(issueNumber, issueDateStr));
 
-        // Настройки страницы: A4, поля, рамка
         const pageSettings = {
             size: { width: mm(210), height: mm(297) },
             margin: {
-                top: mm(20),
+                top: mm(28),
                 right: mm(15),
                 bottom: mm(20),
                 left: mm(15),
-                header: mm(10),
-                footer: mm(10),
-            },
-            borders: {
-                pageBorderTop: { style: BorderStyle.SINGLE, size: 6, space: 24, color: '000000' },
-                pageBorderBottom: { style: BorderStyle.SINGLE, size: 6, space: 24, color: '000000' },
-                pageBorderLeft: { style: BorderStyle.SINGLE, size: 6, space: 24, color: '000000' },
-                pageBorderRight: { style: BorderStyle.SINGLE, size: 6, space: 24, color: '000000' },
-                display: PageBorderDisplay.ALL_PAGES,
-                offsetFrom: PageBorderOffsetFrom.PAGE,
+                header: mm(8),
+                footer: mm(8),
             },
         };
 
-        const doc = new Document({
-            sections: [{
+        const sections = [];
+
+        if (title && title.trim()) {
+            // Секция 1: заголовок во всю ширину (1 колонка)
+            const titlePara = new Paragraph({
+                children: [new TextRun({
+                    text: title.trim().toUpperCase(),
+                    bold: true,
+                    size: 40,
+                    font: 'Comic Sans MS',
+                })],
+                alignment: AlignmentType.CENTER,
+                border: {
+                    top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    left: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                },
+                spacing: { before: 80, after: 80 },
+            });
+
+            sections.push({
+                properties: {
+                    type: SectionType.CONTINUOUS,
+                    page: pageSettings,
+                    titlePage: true,
+                },
+                headers: {
+                    default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
+                    first: new Header({ children: firstHeaderChildren }),
+                },
+                footers: {
+                    default: new Footer({ children: [makeFooterPara()] }),
+                    first: new Footer({ children: [makeFooterPara()] }),
+                },
+                children: [titlePara],
+            });
+
+            // Секция 2: 2 колонки (наследует заголовки)
+            sections.push({
+                properties: {
+                    type: SectionType.CONTINUOUS,
+                    column: { space: mm(5), count: 2, separator: true },
+                },
+                headers: {
+                    default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
+                },
+                footers: {
+                    default: new Footer({ children: [makeFooterPara()] }),
+                },
+                children: bodyChildren,
+            });
+        } else {
+            sections.push({
                 properties: {
                     page: pageSettings,
                     column: { space: mm(5), count: 2, separator: true },
                     titlePage: true,
                 },
                 headers: {
-                    default: new Header({ children: defaultHeaderChildren }),
+                    default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
                     first: new Header({ children: firstHeaderChildren }),
                 },
                 footers: {
@@ -229,9 +315,10 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
                     first: new Footer({ children: [makeFooterPara()] }),
                 },
                 children: bodyChildren,
-            }],
-        });
+            });
+        }
 
+        const doc = new Document({ sections });
         const buffer = await Packer.toBuffer(doc);
         const filename = `Pro-obzor-N${issueNumber}.docx`;
         const encodedName = encodeURIComponent(filename);

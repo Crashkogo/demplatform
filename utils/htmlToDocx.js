@@ -5,7 +5,6 @@ const {
     Paragraph,
     TextRun,
     ExternalHyperlink,
-    UnderlineType,
     AlignmentType,
 } = require('docx');
 
@@ -44,9 +43,6 @@ function parseInline(node, bold = false, italic = false, underline = false) {
                                 text: child.text,
                                 bold,
                                 italics: italic,
-                                style: 'Hyperlink',
-                                underline: { type: UnderlineType.SINGLE },
-                                color: '0563C1',
                             }),
                         ],
                     }));
