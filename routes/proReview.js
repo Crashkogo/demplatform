@@ -8,7 +8,7 @@ const { Op } = require('sequelize');
 const {
     Document, Paragraph, TextRun, Header, Footer, ImageRun,
     AlignmentType, BorderStyle, ShadingType, Packer,
-    Table, TableRow, TableCell, WidthType,
+    Table, TableRow, TableCell, WidthType, SectionType,
 } = require('docx');
 
 const { Article, ArticleSection, HeaderImage, User } = require('../models');
@@ -208,26 +208,6 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
         // Тело документа
         const bodyChildren = [];
 
-        // Заголовок выпуска — первый элемент тела (под шапкой первой страницы)
-        if (title && title.trim()) {
-            bodyChildren.push(new Paragraph({
-                children: [new TextRun({
-                    text: title.trim().toUpperCase(),
-                    bold: true,
-                    size: 40,
-                    font: 'Comic Sans MS',
-                })],
-                alignment: AlignmentType.CENTER,
-                border: {
-                    top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                    bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                    left: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                    right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                },
-                spacing: { before: 60, after: 80 },
-            }));
-        }
-
         for (const section of allSections) {
             const arts = sectionArticles.get(section.id) || [];
             if (arts.length === 0) continue;
@@ -270,7 +250,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
             firstHeaderChildren.push(new Paragraph({
                 children: [new ImageRun({
                     data: headerImageBuffer,
-                    transformation: { width: 620, height: 100 },
+                    transformation: { width: 620, height: 90 },
                     type: imageType,
                 })],
                 alignment: AlignmentType.CENTER,
@@ -281,24 +261,68 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
 
         const pageSize = { width: mm(210), height: mm(297) };
         const commonMargin = { right: mm(15), bottom: mm(20), left: mm(15), header: mm(8), footer: mm(10) };
+        const top = mm(50); // одинаковый для всех секций — иначе CONTINUOUS даёт разрыв страницы
 
-        // Стр.1: лого(~26мм) + таблица(~12мм) + отступ ≈ 50мм
-        // Одна секция → все страницы имеют одинаковый top-margin
-        const topPage1 = mm(50);
-
-        const docSections = [{
-            properties: {
-                page: { size: pageSize, margin: { top: topPage1, ...commonMargin } },
-                column: { space: mm(5), count: 2, separator: true },
-                titlePage: true,
-            },
-            headers: {
-                first: new Header({ children: firstHeaderChildren }),
-                default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
-            },
-            footers: { default: makeFooter(), first: makeFooter() },
-            children: bodyChildren,
-        }];
+        let docSections;
+        if (title && title.trim()) {
+            // Секция 1: 1-колонка, CONTINUOUS → заголовок на всю ширину
+            // Секция 2: 2-колонки → статьи
+            // Ключ: одинаковый top у обеих секций предотвращает прыжок на стр.2
+            const titlePara = new Paragraph({
+                children: [new TextRun({
+                    text: title.trim().toUpperCase(),
+                    bold: true,
+                    size: 40,
+                    font: 'Comic Sans MS',
+                })],
+                alignment: AlignmentType.CENTER,
+                border: {
+                    top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    left: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                    right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
+                },
+                spacing: { before: 60, after: 80 },
+            });
+            docSections = [
+                {
+                    properties: {
+                        type: SectionType.CONTINUOUS,
+                        page: { size: pageSize, margin: { top, ...commonMargin } },
+                        titlePage: true,
+                    },
+                    headers: {
+                        first: new Header({ children: firstHeaderChildren }),
+                        default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
+                    },
+                    footers: { default: makeFooter(), first: makeFooter() },
+                    children: [titlePara],
+                },
+                {
+                    properties: {
+                        page: { size: pageSize, margin: { top, ...commonMargin } },
+                        column: { space: mm(5), count: 2, separator: true },
+                    },
+                    headers: { default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }) },
+                    footers: { default: makeFooter() },
+                    children: bodyChildren,
+                },
+            ];
+        } else {
+            docSections = [{
+                properties: {
+                    page: { size: pageSize, margin: { top, ...commonMargin } },
+                    column: { space: mm(5), count: 2, separator: true },
+                    titlePage: true,
+                },
+                headers: {
+                    first: new Header({ children: firstHeaderChildren }),
+                    default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
+                },
+                footers: { default: makeFooter(), first: makeFooter() },
+                children: bodyChildren,
+            }];
+        }
 
         const doc = new Document({ sections: docSections });
         const buffer = await Packer.toBuffer(doc);
