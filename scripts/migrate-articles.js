@@ -115,6 +115,26 @@ async function migrate() {
         `, { transaction: t });
         console.log('OK admin roles updated');
 
+        // 7. can_generate_pro_review
+        const proReviewCols = await sequelize.query(`
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'roles' AND column_name = 'can_generate_pro_review';
+        `, { type: QueryTypes.SELECT, transaction: t });
+        if (proReviewCols.length === 0) {
+            await sequelize.query(
+                `ALTER TABLE roles ADD COLUMN can_generate_pro_review BOOLEAN DEFAULT FALSE;`,
+                { transaction: t }
+            );
+            console.log('OK roles.can_generate_pro_review');
+        } else {
+            console.log('SKIP roles.can_generate_pro_review (already exists)');
+        }
+        await sequelize.query(
+            `UPDATE roles SET can_generate_pro_review = TRUE WHERE is_admin = TRUE;`,
+            { transaction: t }
+        );
+        console.log('OK admin roles: can_generate_pro_review = TRUE');
+
         await t.commit();
         console.log('\nMigration completed successfully');
     } catch (err) {
