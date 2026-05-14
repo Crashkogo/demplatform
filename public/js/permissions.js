@@ -130,6 +130,8 @@ const PermissionsManager = {
                 return this.has('canViewLogs');
             case 'articles':
                 return this.has('canReadArticles') || this.has('canCreateArticles');
+            case 'pro-review':
+                return this.has('canGenerateProReview');
             default:
                 return false;
         }
