@@ -139,6 +139,7 @@ class Role extends Model {
             // Статьи
             canCreateArticles: this.canCreateArticles,
             canReadArticles: this.canReadArticles,
+            canGenerateProReview: this.canGenerateProReview,
 
             // Общее
             isAdmin: this.isAdmin
@@ -278,7 +279,12 @@ Role.init({
         type: DataTypes.BOOLEAN,
         defaultValue: false,
         field: 'can_read_articles'
-    }
+    },
+    canGenerateProReview: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: 'can_generate_pro_review'
+    },
 }, {
     sequelize,
     modelName: 'Role',
