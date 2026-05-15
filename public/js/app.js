@@ -2641,7 +2641,7 @@ function initModeSwitcher() {
 
 async function loadArticleSectionFilters() {
     try {
-        const response = await axios.get('/api/article_sections');
+        const response = await axios.get('/api/article-sections');
         if (!response.data.success) return;
         const sections = response.data.data;
         if (!sections || sections.length === 0) return;
