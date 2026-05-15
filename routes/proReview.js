@@ -288,7 +288,9 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
         // top = расстояние от верха до текста тела. Должен вместить первостраничную шапку:
         //   header(8) + logo(~24) + issue(~12) + [title(~20)] + зазор(~3) ≈ 67мм → mm(58) tight fit
         // Все страницы имеют одинаковый top → стр.2+ имеют лишний отступ (неизбежно).
-        const top = title && title.trim() ? mm(48) : mm(37);
+        // top = mm(28) для всех страниц. На стр.1 шапка (лого+issue+[title]) может быть
+        // выше mm(28) — Word авто-расширяет под контент. Стр.2+ получают компактный отступ.
+        const top = mm(28);
 
         const docSections = [{
             properties: {
