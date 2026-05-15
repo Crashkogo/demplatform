@@ -2632,6 +2632,43 @@ function initModeSwitcher() {
     if (canProReview) {
         initProReviewForm();
     }
+
+    // Загружаем разделы для фильтра (если есть доступ к статьям)
+    if (canReadArticles) {
+        loadArticleSectionFilters();
+    }
+}
+
+async function loadArticleSectionFilters() {
+    try {
+        const response = await axios.get('/api/article_sections');
+        if (!response.data.success) return;
+        const sections = response.data.data;
+        if (!sections || sections.length === 0) return;
+
+        const filtersEl = document.getElementById('articleSectionFilters');
+        const boxesEl = document.getElementById('articleSectionCheckboxes');
+        if (!filtersEl || !boxesEl) return;
+
+        boxesEl.innerHTML = sections.map(s => `
+            <label class="badge bg-light text-dark border d-flex align-items-center gap-1" style="cursor:pointer;font-size:0.8rem;font-weight:normal">
+                <input type="checkbox" class="article-section-cb" value="${s.id}" style="cursor:pointer">
+                ${s.name}
+            </label>
+        `).join('');
+
+        filtersEl.style.display = '';
+
+        // Перезагружать список при смене чекбоксов
+        boxesEl.addEventListener('change', loadAppArticles);
+    } catch (e) {
+        console.error('Ошибка загрузки разделов:', e);
+    }
+}
+
+function getSelectedSectionIds() {
+    const checked = document.querySelectorAll('.article-section-cb:checked');
+    return Array.from(checked).map(cb => Number(cb.value));
 }
 
 function initProReviewForm() {
@@ -2778,6 +2815,15 @@ async function loadAppArticles() {
 function renderAppArticles(articles) {
     const container = document.getElementById('appArticlesList');
     if (!container) return;
+
+    // Фильтр по выбранным разделам (если ни одна не выбрана — показать все)
+    const selectedIds = getSelectedSectionIds();
+    if (selectedIds.length > 0) {
+        articles = articles.filter(a =>
+            (a.sections || []).some(s => selectedIds.includes(s.id))
+        );
+    }
+
     if (articles.length === 0) {
         container.innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-newspaper display-4 d-block mb-3"></i>Статьи не найдены</div>';
         return;
