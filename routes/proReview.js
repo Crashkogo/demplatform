@@ -120,6 +120,7 @@ function makeSectionArticlesTable(articles) {
             children: [new TextRun({ text: article.title, size: 18, italics: true })],
             alignment: AlignmentType.CENTER,
             shading: { type: ShadingType.SOLID, color: 'D9D9D9', fill: 'D9D9D9' },
+            border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' } },
             spacing: { before: 40, after: 40 },
         });
         const contentParas = htmlToDocxParagraphs(article.content, { size: 20 });
@@ -219,6 +220,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
                     size: 28,
                     font: 'Comic Sans MS',
                 })],
+                alignment: AlignmentType.CENTER,
                 shading: { type: ShadingType.SOLID, color: 'CCCCCC', fill: 'CCCCCC' },
                 spacing: { before: 100, after: 0 },
                 border: {
