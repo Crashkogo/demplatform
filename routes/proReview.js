@@ -286,7 +286,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
         // top = расстояние от верха до текста тела. Должен вместить первостраничную шапку:
         //   header(8) + logo(~24) + issue(~12) + [title(~20)] + зазор(~3) ≈ 67мм → mm(58) tight fit
         // Все страницы имеют одинаковый top → стр.2+ имеют лишний отступ (неизбежно).
-        const top = title && title.trim() ? mm(58) : mm(47);
+        const top = title && title.trim() ? mm(48) : mm(47);
 
         const docSections = [{
             properties: {
