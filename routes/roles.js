@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { Role, Category } = require('../models');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, invalidateAllUserCache } = require('../middleware/auth');
 const { checkAccess } = require('../middleware/authorization');
 const { writeLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
@@ -105,6 +105,9 @@ router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canManageRoles
         if (allowedCategories && Array.isArray(allowedCategories)) {
             await role.setAllowedCategories(allowedCategories);
         }
+
+        // Права роли изменились — сбрасываем кэш всех пользователей с этой ролью
+        invalidateAllUserCache();
 
         res.json({ success: true, message: 'Роль обновлена успешно', data: role });
     } catch (error) {

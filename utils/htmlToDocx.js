@@ -6,6 +6,7 @@ const {
     TextRun,
     ExternalHyperlink,
     AlignmentType,
+    UnderlineType,
 } = require('docx');
 
 /**

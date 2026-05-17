@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(code-review:code-review)",
+      "Skill(code-review:code-review:*)",
+      "Bash(npm install:*)",
+      "Bash(xargs wc:*)",
+      "Bash(node -e \"require\\(''cookie-parser''\\); console.log\\(''ok''\\)\")",
+      "Bash(node -e \"const c = require\\(''./config''\\); console.log\\(JSON.stringify\\({jwtExpiresIn: c.jwtExpiresIn, isProd: process.env.NODE_ENV}\\)\\)\")",
+      "Bash(mkdir -p public/libs/jstree/themes/default public/libs/pdfjs public/libs/xlsx public/libs/jszip public/libs/dropzone)",
+      "Bash(curl -s --fail -o public/libs/jstree/jstree.min.js \"https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js\")",
+      "Bash(curl -s --fail -o public/libs/jstree/themes/default/style.min.css \"https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css\")",
+      "Bash(curl -s --fail -o public/libs/jstree/themes/default/throbber.gif \"https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/throbber.gif\")",
+      "Bash(curl -s --fail -o public/libs/jstree/themes/default/32px.png \"https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/32px.png\")",
+      "Bash(node -e \"console.log\\(require\\(''./node_modules/tinymce/package.json''\\).version\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(node -e \"require\\(''sanitize-html''\\); console.log\\(''ok''\\)\")"
+    ]
+  }
+}

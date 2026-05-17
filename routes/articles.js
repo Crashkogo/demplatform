@@ -4,16 +4,29 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
+const sanitizeHtml = require('sanitize-html');
 const { Article, ArticleSection, HeaderImage, User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
-const { checkAccess } = require('../middleware/authorization');
+const { writeLimiter, uploadLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
+
+// Разрешённые теги и атрибуты — соответствуют возможностям TinyMCE в этом проекте
+const sanitizeOptions = {
+    allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'a', 'span'],
+    allowedAttributes: { 'a': ['href', 'target', 'rel'] },
+    allowedSchemes: ['http', 'https', 'mailto'],
+};
+
+function sanitizeContent(html) {
+    if (!html) return '';
+    return sanitizeHtml(html, sanitizeOptions);
+}
 
 // Multer для загрузки изображений шапки
 const headerImageStorage = multer.diskStorage({
     destination: (req, file, cb) => {
         const dir = path.join(__dirname, '../uploads/header-images');
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.mkdirSync(dir, { recursive: true });
         cb(null, dir);
     },
     filename: (req, file, cb) => {
@@ -46,6 +59,14 @@ const canCreate = (req, res, next) => {
     return res.status(403).json({ success: false, message: 'Нет права создавать статьи' });
 };
 
+// Middleware: право на удаление статей
+const canDelete = (req, res, next) => {
+    const role = req.user.roleData;
+    if (!role) return res.status(403).json({ success: false, message: 'Нет доступа' });
+    if (role.isAdmin || role.canCreateArticles) return next();
+    return res.status(403).json({ success: false, message: 'Нет права удалять статьи' });
+};
+
 // ============================================================
 // ARTICLE SECTIONS
 // ============================================================
@@ -62,7 +83,7 @@ router.get('/article-sections', authenticateToken, canRead, async (req, res) => 
 });
 
 // POST /api/article-sections
-router.post('/article-sections', authenticateToken, canCreate, async (req, res) => {
+router.post('/article-sections', authenticateToken, canCreate, writeLimiter, async (req, res) => {
     try {
         const { name, sortOrder } = req.body;
         if (!name || !name.trim()) {
@@ -77,7 +98,7 @@ router.post('/article-sections', authenticateToken, canCreate, async (req, res) 
 });
 
 // PUT /api/article-sections/:id
-router.put('/article-sections/:id', authenticateToken, canCreate, async (req, res) => {
+router.put('/article-sections/:id', authenticateToken, canCreate, writeLimiter, async (req, res) => {
     try {
         const section = await ArticleSection.findByPk(req.params.id);
         if (!section) return res.status(404).json({ success: false, message: 'Раздел не найден' });
@@ -96,7 +117,7 @@ router.put('/article-sections/:id', authenticateToken, canCreate, async (req, re
 });
 
 // DELETE /api/article-sections/:id
-router.delete('/article-sections/:id', authenticateToken, canCreate, async (req, res) => {
+router.delete('/article-sections/:id', authenticateToken, canCreate, writeLimiter, async (req, res) => {
     try {
         const section = await ArticleSection.findByPk(req.params.id);
         if (!section) return res.status(404).json({ success: false, message: 'Раздел не найден' });
@@ -115,7 +136,17 @@ router.delete('/article-sections/:id', authenticateToken, canCreate, async (req,
 // GET /api/articles
 router.get('/articles', authenticateToken, canRead, async (req, res) => {
     try {
-        const { search, dateFrom, dateTo, sectionId } = req.query;
+        const { search, dateFrom, dateTo } = req.query;
+        const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+        const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+        // sectionIds может прийти как строка "1" или массив ["1","2"]
+        const rawSectionIds = req.query.sectionIds;
+        const sectionIds = rawSectionIds
+            ? (Array.isArray(rawSectionIds) ? rawSectionIds : [rawSectionIds])
+                .map(id => parseInt(id, 10)).filter(Boolean)
+            : [];
+
         const where = {};
 
         if (search) {
@@ -136,18 +167,21 @@ router.get('/articles', authenticateToken, canRead, async (req, res) => {
             { model: User, as: 'author', attributes: ['id', 'login'] }
         ];
 
-        if (sectionId) {
-            include[0].where = { id: sectionId };
+        if (sectionIds.length > 0) {
+            include[0].where = { id: { [Op.in]: sectionIds } };
             include[0].required = true;
         }
 
-        const articles = await Article.findAll({
+        const { count: total, rows: articles } = await Article.findAndCountAll({
             where,
             include,
-            order: [['publishedAt', 'DESC']]
+            order: [['publishedAt', 'DESC']],
+            limit,
+            offset,
+            distinct: true  // корректный count при JOIN many-to-many
         });
 
-        res.json({ success: true, data: articles });
+        res.json({ success: true, data: articles, total, limit, offset });
     } catch (err) {
         logger.error('GET /articles:', err);
         res.status(500).json({ success: false, message: 'Ошибка сервера' });
@@ -172,7 +206,7 @@ router.get('/articles/:id', authenticateToken, canRead, async (req, res) => {
 });
 
 // POST /api/articles
-router.post('/articles', authenticateToken, canCreate, async (req, res) => {
+router.post('/articles', authenticateToken, canCreate, writeLimiter, async (req, res) => {
     try {
         const { title, content, sectionIds, publishedAt } = req.body;
         if (!title || !title.trim()) {
@@ -180,7 +214,7 @@ router.post('/articles', authenticateToken, canCreate, async (req, res) => {
         }
         const article = await Article.create({
             title: title.trim(),
-            content: content || '',
+            content: sanitizeContent(content),
             authorId: req.user.id,
             publishedAt: publishedAt ? new Date(publishedAt) : new Date()
         });
@@ -202,7 +236,7 @@ router.post('/articles', authenticateToken, canCreate, async (req, res) => {
 });
 
 // PUT /api/articles/:id
-router.put('/articles/:id', authenticateToken, canCreate, async (req, res) => {
+router.put('/articles/:id', authenticateToken, canCreate, writeLimiter, async (req, res) => {
     try {
         const article = await Article.findByPk(req.params.id);
         if (!article) return res.status(404).json({ success: false, message: 'Статья не найдена' });
@@ -211,7 +245,7 @@ router.put('/articles/:id', authenticateToken, canCreate, async (req, res) => {
         if (!title || !title.trim()) {
             return res.status(400).json({ success: false, message: 'Заголовок обязателен' });
         }
-        const updateData = { title: title.trim(), content: content || '' };
+        const updateData = { title: title.trim(), content: sanitizeContent(content) };
         if (publishedAt) updateData.publishedAt = new Date(publishedAt);
         await article.update(updateData);
 
@@ -234,7 +268,7 @@ router.put('/articles/:id', authenticateToken, canCreate, async (req, res) => {
 });
 
 // DELETE /api/articles/:id
-router.delete('/articles/:id', authenticateToken, canCreate, async (req, res) => {
+router.delete('/articles/:id', authenticateToken, canDelete, writeLimiter, async (req, res) => {
     try {
         const article = await Article.findByPk(req.params.id);
         if (!article) return res.status(404).json({ success: false, message: 'Статья не найдена' });
@@ -263,7 +297,7 @@ router.get('/header-image', authenticateToken, async (req, res) => {
 });
 
 // POST /api/header-image
-router.post('/header-image', authenticateToken, canCreate, headerUpload.single('image'), async (req, res) => {
+router.post('/header-image', authenticateToken, canCreate, uploadLimiter, headerUpload.single('image'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, message: 'Файл не загружен' });
@@ -288,11 +322,12 @@ router.get('/header-image/file/:filename', authenticateToken, async (req, res) =
     try {
         const filename = path.basename(req.params.filename);
         const filePath = path.join(__dirname, '../uploads/header-images', filename);
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ success: false, message: 'Файл не найден' });
-        }
+        await fs.promises.access(filePath);
         res.sendFile(filePath);
     } catch (err) {
+        if (err.code === 'ENOENT') {
+            return res.status(404).json({ success: false, message: 'Файл не найден' });
+        }
         logger.error('GET /header-image/file:', err);
         res.status(500).json({ success: false, message: 'Ошибка сервера' });
     }

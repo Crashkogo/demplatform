@@ -52,6 +52,7 @@
     "path": "^0.12.7",
     "pg": "^8.11.3",
     "pg-hstore": "^2.3.4",
+    "sanitize-html": "^2.17.4",
     "sequelize": "^6.35.0",
     "tinymce": "6.8.4"
   },

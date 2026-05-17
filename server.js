@@ -173,8 +173,18 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
-// Статические файлы
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Статические файлы — uploads закрыты за авторизацией
+const jwt = require('jsonwebtoken');
+app.use('/uploads', (req, res, next) => {
+    const token = req.cookies?.authToken || req.headers['authorization']?.split(' ')[1];
+    if (!token) return res.status(401).json({ success: false, message: 'Требуется авторизация' });
+    try {
+        jwt.verify(token, config.jwtSecret);
+        next();
+    } catch {
+        return res.status(401).json({ success: false, message: 'Недействительный токен' });
+    }
+}, express.static(path.join(__dirname, 'uploads')));
 app.use('/libs/tinymce', express.static(path.join(__dirname, 'node_modules/tinymce')));
 app.use(express.static(path.join(__dirname, 'public')));
 

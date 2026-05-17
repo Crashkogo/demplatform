@@ -2614,7 +2614,7 @@ function initModeSwitcher() {
     if (proToggle) proToggle.addEventListener('change', toggleProTitle);
 
     const searchBtn = document.querySelector('#articlesListTab .btn-outline-primary');
-    if (searchBtn) searchBtn.addEventListener('click', loadAppArticles);
+    if (searchBtn) searchBtn.addEventListener('click', () => loadAppArticles());
 
     const searchInput = document.getElementById('articleSearchInput');
     if (searchInput) {
@@ -2660,7 +2660,7 @@ async function loadArticleSectionFilters() {
         filtersEl.style.display = '';
 
         // Перезагружать список при смене чекбоксов
-        boxesEl.addEventListener('change', loadAppArticles);
+        boxesEl.addEventListener('change', () => loadAppArticles());
     } catch (e) {
         console.error('Ошибка загрузки разделов:', e);
     }
@@ -2786,13 +2786,20 @@ function toggleProTitle() {
     if (field) field.style.display = toggle.checked ? 'block' : 'none';
 }
 
-async function loadAppArticles() {
+let _articlesOffset = 0;
+const ARTICLES_PAGE_SIZE = 50;
+
+async function loadAppArticles(append = false) {
     const container = document.getElementById('appArticlesList');
     if (!container) return;
-    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
+
+    if (!append) {
+        _articlesOffset = 0;
+        container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
+    }
 
     try {
-        const params = {};
+        const params = { limit: ARTICLES_PAGE_SIZE, offset: _articlesOffset };
         const search = document.getElementById('articleSearchInput')?.value?.trim();
         const dateFrom = document.getElementById('articleDateFrom')?.value;
         const dateTo = document.getElementById('articleDateTo')?.value;
@@ -2800,43 +2807,48 @@ async function loadAppArticles() {
         if (dateFrom) params.dateFrom = dateFrom;
         if (dateTo) params.dateTo = dateTo;
 
+        // Фильтр разделов — передаём все выбранные на сервер
+        const selectedIds = getSelectedSectionIds();
+        if (selectedIds.length > 0) params.sectionIds = selectedIds;
+
         const response = await axios.get('/api/articles', { params });
 
         if (response.data.success) {
-            renderAppArticles(response.data.data);
+            const { data: articles, total } = response.data;
+            renderAppArticles(articles, append, total);
+            _articlesOffset += articles.length;
         } else {
             container.innerHTML = '<div class="alert alert-danger">Ошибка загрузки статей</div>';
         }
     } catch (err) {
-        container.innerHTML = '<div class="alert alert-danger">Ошибка загрузки статей</div>';
+        if (!append) container.innerHTML = '<div class="alert alert-danger">Ошибка загрузки статей</div>';
     }
 }
 
-function renderAppArticles(articles) {
+function renderAppArticles(articles, append, total) {
     const container = document.getElementById('appArticlesList');
     if (!container) return;
 
-    // Фильтр по выбранным разделам (если ни одна не выбрана — показать все)
-    const selectedIds = getSelectedSectionIds();
-    if (selectedIds.length > 0) {
-        articles = articles.filter(a =>
-            (a.sections || []).some(s => selectedIds.includes(s.id))
-        );
-    }
+    if (!append) container.innerHTML = '';
 
-    if (articles.length === 0) {
+    // Убираем старую кнопку "загрузить ещё" если есть
+    const oldBtn = document.getElementById('articlesLoadMoreBtn');
+    if (oldBtn) oldBtn.remove();
+
+    if (articles.length === 0 && !append) {
         container.innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-newspaper display-4 d-block mb-3"></i>Статьи не найдены</div>';
         return;
     }
-    container.innerHTML = articles.map(a => {
+
+    const html = articles.map(a => {
         const date = new Date(a.publishedAt || a.createdAt).toLocaleDateString('ru-RU');
-        const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${s.name}</span>`).join('');
+        const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${escapeHtml(s.name)}</span>`).join('');
         const preview = (a.content || '').replace(/<[^>]*>/g, '').substring(0, 200);
         return `
             <div class="card mb-3 border-0 shadow-sm" style="border-left: 4px solid #667eea !important;">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-1">
-                        <h5 class="mb-0">${a.title}</h5>
+                        <h5 class="mb-0">${escapeHtml(a.title)}</h5>
                         <small class="text-muted ms-3 text-nowrap">${date}</small>
                     </div>
                     <div class="mb-2">${sections}</div>
@@ -2845,4 +2857,15 @@ function renderAppArticles(articles) {
             </div>
         `;
     }).join('');
+    container.insertAdjacentHTML('beforeend', html);
+
+    // Кнопка "Загрузить ещё" если сервер вернул больше чем показано
+    if (total !== undefined && _articlesOffset < total) {
+        const btn = document.createElement('div');
+        btn.id = 'articlesLoadMoreBtn';
+        btn.className = 'text-center py-3';
+        btn.innerHTML = `<button class="btn btn-outline-secondary btn-sm">Загрузить ещё (${total - _articlesOffset} статей)</button>`;
+        btn.querySelector('button').addEventListener('click', () => loadAppArticles(true));
+        container.appendChild(btn);
+    }
 }

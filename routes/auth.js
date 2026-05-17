@@ -38,22 +38,7 @@ function buildUserWithRole(userObject, roleData) {
             id: roleData.id,
             name: roleData.name,
             description: roleData.description,
-            isAdmin: roleData.isAdmin,
-            canViewMaterials: roleData.canViewMaterials,
-            canDownloadMaterials: roleData.canDownloadMaterials,
-            canCreateMaterials: roleData.canCreateMaterials,
-            canEditMaterials: roleData.canEditMaterials,
-            canDeleteMaterials: roleData.canDeleteMaterials,
-            canCreateCategories: roleData.canCreateCategories,
-            canEditCategories: roleData.canEditCategories,
-            canDeleteCategories: roleData.canDeleteCategories,
-            canManageAllCategories: roleData.canManageAllCategories,
-            canViewUsers: roleData.canViewUsers,
-            canCreateUsers: roleData.canCreateUsers,
-            canEditUsers: roleData.canEditUsers,
-            canDeleteUsers: roleData.canDeleteUsers,
-            canManageRoles: roleData.canManageRoles,
-            canViewLogs: roleData.canViewLogs,
+            ...roleData.getPermissions(),
             allowedCategories: roleData.allowedCategories || []
         }
     };

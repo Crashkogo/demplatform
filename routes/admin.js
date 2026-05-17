@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { User, Material, Category, sequelize, AuditEvent } = require('../models');
 const { Op } = require('sequelize');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, invalidateUserCache } = require('../middleware/auth');
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
 const { writeLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
@@ -281,6 +281,7 @@ router.put('/users/:id', [writeLimiter, authenticateToken, requireAdmin], async 
         }
 
         await user.save();
+        invalidateUserCache(user.id);
 
         res.json({
             success: true,
@@ -317,6 +318,7 @@ router.delete('/users/:id', [writeLimiter, authenticateToken, requireAdmin], asy
             });
         }
 
+        invalidateUserCache(user.id);
         await user.destroy();
 
         res.json({

@@ -1,3 +1,9 @@
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Глобальные переменные
 let currentUser = null;
 let dropzone = null;
@@ -2100,8 +2106,8 @@ function renderArticles(articles) {
     const canEdit = PermissionsManager.has('canCreateArticles');
     articles.forEach(a => {
         const date = new Date(a.publishedAt || a.createdAt).toLocaleDateString('ru-RU');
-        const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${s.name}</span>`).join('');
-        const author = a.author ? a.author.login : '—';
+        const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${escapeHtml(s.name)}</span>`).join('');
+        const author = a.author ? escapeHtml(a.author.login) : '—';
         let actions = '';
         if (canEdit) {
             actions = `
@@ -2111,7 +2117,7 @@ function renderArticles(articles) {
         }
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${a.title}</td>
+            <td>${escapeHtml(a.title)}</td>
             <td>${sections || '—'}</td>
             <td>${author}</td>
             <td>${date}</td>
@@ -2142,7 +2148,7 @@ function renderSectionCheckboxes(selectedIds = []) {
     container.innerHTML = allArticleSections.map(s => `
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="sec_${s.id}" value="${s.id}" ${selectedIds.includes(s.id) ? 'checked' : ''}>
-            <label class="form-check-label" for="sec_${s.id}">${s.name}</label>
+            <label class="form-check-label" for="sec_${s.id}">${escapeHtml(s.name)}</label>
         </div>
     `).join('');
 }
@@ -2161,7 +2167,7 @@ function renderSectionsList() {
                 data-id="${s.id}" data-name="${s.name.replace(/"/g, '&quot;')}"
                 value="${s.sortOrder ?? 0}" min="0" max="999"
                 style="width:60px;flex-shrink:0;" title="Порядок в DOCX">
-            <span class="flex-grow-1">${s.name}</span>
+            <span class="flex-grow-1">${escapeHtml(s.name)}</span>
             <button class="btn btn-sm btn-outline-danger" data-section-action="delete" data-id="${s.id}">
                 <i class="bi bi-trash"></i>
             </button>

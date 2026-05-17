@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs/promises');
 const { Op } = require('sequelize');
 const {
     Document, Paragraph, TextRun, Header, Footer, ImageRun,
@@ -14,6 +14,7 @@ const {
 const { Article, ArticleSection, HeaderImage, User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { htmlToDocxParagraphs } = require('../utils/htmlToDocx');
+const { writeLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
 
 const mm = (val) => Math.round(val * 56.69);
@@ -148,15 +149,25 @@ function makeSectionArticlesTable(articles) {
     });
 }
 
-router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, res) => {
+router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter, async (req, res) => {
     try {
         const { issueNumber, dateFrom, dateTo, title } = req.query;
         if (!issueNumber || !dateFrom || !dateTo) {
             return res.status(400).json({ success: false, message: 'issueNumber, dateFrom, dateTo обязательны' });
         }
 
+        // issueNumber — только цифры (попадает в имя файла в Content-Disposition)
+        if (!/^\d+$/.test(issueNumber)) {
+            return res.status(400).json({ success: false, message: 'issueNumber должен быть числом' });
+        }
+
         const dateFromObj = new Date(dateFrom);
         const dateToObj = new Date(dateTo);
+
+        if (isNaN(dateFromObj.getTime()) || isNaN(dateToObj.getTime())) {
+            return res.status(400).json({ success: false, message: 'Некорректный формат даты' });
+        }
+
         dateToObj.setHours(23, 59, 59, 999);
 
         const fmtDate = (d) => d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -168,10 +179,13 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
         const headerImg = await HeaderImage.findOne({ order: [['createdAt', 'DESC']] });
         if (headerImg) {
             const imgPath = path.resolve(headerImg.path);
-            if (fs.existsSync(imgPath)) {
-                headerImageBuffer = fs.readFileSync(imgPath);
+            try {
+                await fs.access(imgPath);
+                headerImageBuffer = await fs.readFile(imgPath);
                 const ext = path.extname(headerImg.filename).toLowerCase().replace('.', '');
                 imageType = (ext === 'jpg' || ext === 'jpeg') ? 'jpg' : 'png';
+            } catch {
+                // файл не найден — генерируем документ без шапки
             }
         }
 
@@ -318,7 +332,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, async (req, r
 
     } catch (err) {
         logger.error('GET /pro-review/generate:', err);
-        res.status(500).json({ success: false, message: 'Ошибка генерации DOCX: ' + err.message });
+        res.status(500).json({ success: false, message: 'Ошибка генерации документа' });
     }
 });
 

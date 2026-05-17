@@ -3,6 +3,31 @@ const { User } = require('../models');
 const config = require('../config');
 const logger = require('../utils/logger');
 
+// Кэш пользователей в памяти — снижает нагрузку на БД при частых запросах
+const USER_CACHE_TTL = 5 * 60 * 1000; // 5 минут
+const _userCache = new Map();
+
+function _getCached(userId) {
+    const entry = _userCache.get(userId);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > USER_CACHE_TTL) { _userCache.delete(userId); return null; }
+    return entry.user;
+}
+
+function _setCache(userId, user) {
+    _userCache.set(userId, { user, ts: Date.now() });
+}
+
+// Инвалидация кэша конкретного пользователя (смена роли, пароля, логина)
+function invalidateUserCache(userId) {
+    _userCache.delete(Number(userId));
+}
+
+// Инвалидация всего кэша (при изменении прав роли)
+function invalidateAllUserCache() {
+    _userCache.clear();
+}
+
 // Middleware для проверки JWT токена
 const authenticateToken = async (req, res, next) => {
     try {
@@ -20,19 +45,26 @@ const authenticateToken = async (req, res, next) => {
         const decoded = jwt.verify(token, config.jwtSecret);
         logger.debug('Токен верифицирован для пользователя ID:', decoded.userId);
 
-        // Загружаем пользователя с ролью
-        const { Role } = require('../models');
-        const user = await User.findByPk(decoded.userId, {
-            attributes: { exclude: ['password'] },
-            include: [{
-                model: Role,
-                as: 'roleData',
+        // Проверяем кэш — если есть актуальная запись, пропускаем запрос к БД
+        let user = _getCached(decoded.userId);
+
+        if (!user) {
+            // Загружаем пользователя с ролью
+            const { Role } = require('../models');
+            user = await User.findByPk(decoded.userId, {
+                attributes: { exclude: ['password'] },
                 include: [{
-                    association: 'allowedCategories',
-                    through: { attributes: [] }
+                    model: Role,
+                    as: 'roleData',
+                    include: [{
+                        association: 'allowedCategories',
+                        through: { attributes: [] }
+                    }]
                 }]
-            }]
-        });
+            });
+
+            if (user) _setCache(decoded.userId, user);
+        }
 
         if (!user) {
             return res.status(401).json({
@@ -113,5 +145,7 @@ const generateToken = (userId) => {
 module.exports = {
     authenticateToken,
     requireAdmin,
-    generateToken
+    generateToken,
+    invalidateUserCache,
+    invalidateAllUserCache
 }; 
