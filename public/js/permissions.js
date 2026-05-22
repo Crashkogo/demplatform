@@ -129,6 +129,7 @@ const PermissionsManager = {
             case 'history-section':
                 return this.has('canViewLogs');
             case 'articles':
+            case 'articles-section':
                 return this.has('canReadArticles') || this.has('canCreateArticles');
             case 'pro-review':
                 return this.has('canGenerateProReview');
