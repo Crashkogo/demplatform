@@ -272,7 +272,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
             firstHeaderChildren.push(new Paragraph({
                 children: [new ImageRun({
                     data: headerImageBuffer,
-                    transformation: { width: 620, height: 90 },
+                    transformation: { width: 620, height: 52 },
                     type: imageType,
                 })],
                 alignment: AlignmentType.CENTER,
@@ -293,7 +293,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
         // top = mm(18): -10мм от предыдущего mm(28) по запросу пользователя.
         // На стр.1 шапка (лого+issue) ~36мм > 18мм — Word авто-расширяет.
         // Стр.2+ (только issue ~16мм) получают минимальный отступ.
-        const top = mm(28);
+        const top = mm(18);
 
         const docSections = [{
             properties: {
