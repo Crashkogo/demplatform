@@ -218,6 +218,13 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
         // Тело документа
         const bodyChildren = [];
 
+        // Spacer только для стр.1: добавляет 5мм отступа от колонтитула.
+        // На стр.2+ этот параграф уже "съеден" и не повторяется.
+        bodyChildren.push(new Paragraph({
+            children: [new TextRun({ text: '', size: 1 })],
+            spacing: { before: 0, after: mm(5) },
+        }));
+
         for (const section of allSections) {
             const arts = sectionArticles.get(section.id) || [];
             if (arts.length === 0) continue;
