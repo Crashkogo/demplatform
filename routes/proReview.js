@@ -272,7 +272,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
             firstHeaderChildren.push(new Paragraph({
                 children: [new ImageRun({
                     data: headerImageBuffer,
-                    transformation: { width: 620, height: 90 },
+                    transformation: { width: 680, height: 178 },
                     type: imageType,
                 })],
                 alignment: AlignmentType.CENTER,
