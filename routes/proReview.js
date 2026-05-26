@@ -231,7 +231,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
                 })],
                 alignment: AlignmentType.CENTER,
                 shading: { type: ShadingType.SOLID, color: 'CCCCCC', fill: 'CCCCCC' },
-                spacing: { before: 100, after: 0 },
+                spacing: { before: 0, after: 0 },
                 border: {
                     top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
                     bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
