@@ -280,6 +280,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
             }));
         }
         firstHeaderChildren.push(makeIssueTable(issueDateStr));
+        firstHeaderChildren.push(new Paragraph({ children: [], spacing: { before: 0, after: 0 } }));
 
         const pageSize = { width: mm(210), height: mm(297) };
         const commonMargin = { right: mm(15), bottom: mm(20), left: mm(15), header: mm(8), footer: mm(10) };
