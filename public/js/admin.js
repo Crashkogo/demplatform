@@ -2243,7 +2243,8 @@ async function showArticleForm(articleId) {
         height: 450,
         menubar: true,
         plugins: 'lists link table code wordcount',
-        toolbar: 'undo redo | blocks | bold italic underline | alignleft aligncenter alignright | bullist numlist | link table | code',
+        toolbar: 'fontfamily fontsize | undo redo | blocks | bold italic underline | alignleft aligncenter alignright alignjustify | bullist numlist | link table | code',
+        font_size_formats: '8pt 9pt 10pt 11pt 12pt 14pt 16pt 18pt 20pt 24pt 28pt 36pt 48pt 72pt',
         content_style: 'body { font-family: Arial, sans-serif; font-size: 14px; }',
         setup: (editor) => { articleTinyMCE = editor; }
     });

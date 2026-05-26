@@ -186,6 +186,8 @@ app.use('/uploads', (req, res, next) => {
     }
 }, express.static(path.join(__dirname, 'uploads')));
 app.use('/libs/tinymce', express.static(path.join(__dirname, 'node_modules/tinymce')));
+// Языковой пакет TinyMCE (ru.js) хранится в public/libs/tinymce-langs, не в node_modules
+app.use('/libs/tinymce/langs', express.static(path.join(__dirname, 'public/libs/tinymce-langs')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API маршруты
