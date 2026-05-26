@@ -2301,8 +2301,8 @@ async function saveArticle() {
     const title = document.getElementById('articleTitle').value.trim();
     if (!title) { showError('Введите заголовок'); return; }
 
-    const ed = tinymce.get('articleContent');
-    const content = ed ? ed.getContent() : document.getElementById('articleContent').value;
+    const ed = tinymce.get('articleContent') || articleTinyMCE;
+    const content = ed ? ed.getContent() : (document.getElementById('articleContent').value || '');
     const sectionIds = getSelectedSectionIds();
     const publishedAt = document.getElementById('articlePublishedAt').value || new Date().toISOString().substring(0, 10);
 

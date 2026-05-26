@@ -13,7 +13,10 @@ const logger = require('../utils/logger');
 // Разрешённые теги и атрибуты — соответствуют возможностям TinyMCE в этом проекте
 const sanitizeOptions = {
     allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'a', 'span'],
-    allowedAttributes: { 'a': ['href', 'target', 'rel'] },
+    allowedAttributes: {
+        'a': ['href', 'target', 'rel'],
+        '*': ['style'],   // шрифт, размер, выравнивание из TinyMCE
+    },
     allowedSchemes: ['http', 'https', 'mailto'],
 };
 
