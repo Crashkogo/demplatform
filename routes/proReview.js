@@ -280,6 +280,12 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
             }));
         }
         firstHeaderChildren.push(makeIssueTable(issueDateStr));
+        // Spacer в шапке стр.1 — увеличивает высоту первой шапки,
+        // Word auto-expand отодвигает body на стр.1. Стр.2+ (default header) без spacer → плотно.
+        firstHeaderChildren.push(new Paragraph({
+            children: [new TextRun({ text: '', size: 1 })],
+            spacing: { before: 0, after: mm(5) },
+        }));
 
         const pageSize = { width: mm(210), height: mm(297) };
         const commonMargin = { right: mm(15), bottom: mm(20), left: mm(15), header: mm(8), footer: mm(10) };
@@ -287,7 +293,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
         // top = mm(18): -10мм от предыдущего mm(28) по запросу пользователя.
         // На стр.1 шапка (лого+issue) ~36мм > 18мм — Word авто-расширяет.
         // Стр.2+ (только issue ~16мм) получают минимальный отступ.
-        const top = mm(23);
+        const top = mm(28);
 
         const docSections = [{
             properties: {
