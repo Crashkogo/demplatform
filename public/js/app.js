@@ -2672,17 +2672,15 @@ function getSelectedSectionIds() {
 }
 
 function initProReviewForm() {
-    const issueInput = document.getElementById('proIssueNumber');
     const dateFromInput = document.getElementById('proDateFrom');
     const dateToInput = document.getElementById('proDateTo');
     const generateBtn = document.getElementById('generateProBtn');
 
     function updateBtnState() {
-        const ready = issueInput?.value && dateFromInput?.value && dateToInput?.value;
+        const ready = dateFromInput?.value && dateToInput?.value;
         if (generateBtn) generateBtn.disabled = !ready;
     }
 
-    if (issueInput) issueInput.addEventListener('input', updateBtnState);
     if (dateFromInput) dateFromInput.addEventListener('change', updateBtnState);
     if (dateToInput) dateToInput.addEventListener('change', updateBtnState);
 
@@ -2692,14 +2690,10 @@ function initProReviewForm() {
 }
 
 async function generateProReview() {
-    const issueNumber = document.getElementById('proIssueNumber')?.value;
     const dateFrom = document.getElementById('proDateFrom')?.value;
     const dateTo = document.getElementById('proDateTo')?.value;
-    const titleToggle = document.getElementById('proTitleToggle');
-    const titleInput = document.getElementById('proTitleInput');
-    const title = (titleToggle?.checked && titleInput?.value.trim()) ? titleInput.value.trim() : '';
 
-    if (!issueNumber || !dateFrom || !dateTo) return;
+    if (!dateFrom || !dateTo) return;
 
     const generateBtn = document.getElementById('generateProBtn');
     if (generateBtn) {
@@ -2708,8 +2702,7 @@ async function generateProReview() {
     }
 
     try {
-        const params = new URLSearchParams({ issueNumber, dateFrom, dateTo });
-        if (title) params.set('title', title);
+        const params = new URLSearchParams({ dateFrom, dateTo });
 
         const response = await fetch(`/api/pro-review/generate?${params}`, { credentials: 'include' });
 
@@ -2723,7 +2716,7 @@ async function generateProReview() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Pro-obzor-N${issueNumber}.docx`;
+        a.download = `Pro-obzor-${dateFrom}-${dateTo}.docx`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

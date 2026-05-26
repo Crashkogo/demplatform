@@ -35,8 +35,8 @@ const noTableBorder = {
     insideVertical: { style: BorderStyle.NONE, size: 0, color: 'auto' },
 };
 
-// Таблица колонтитула: № слева, дата справа, рамка + серый фон
-function makeIssueTable(issueNum, dateStr) {
+// Таблица колонтитула: НОВОСТИ ЗАКОНОДАТЕЛЬСТВА слева, дата справа, рамка + серый фон
+function makeIssueTable(dateStr) {
     const outerV = { style: BorderStyle.SINGLE, size: 12, color: '000000' };
     const noB = { style: BorderStyle.NONE, size: 0, color: 'auto' };
     const shading = { type: ShadingType.SOLID, color: 'CCCCCC', fill: 'CCCCCC' };
@@ -51,7 +51,7 @@ function makeIssueTable(issueNum, dateStr) {
                         shading,
                         margins: { top: 60, bottom: 60, left: 120, right: 60 },
                         children: [new Paragraph({
-                            children: [new TextRun({ text: `№ ${issueNum} НОВОСТИ ЗАКОНОДАТЕЛЬСТВА`, bold: true, size: 18 })],
+                            children: [new TextRun({ text: 'НОВОСТИ ЗАКОНОДАТЕЛЬСТВА', bold: true, size: 18 })],
                             alignment: AlignmentType.LEFT,
                         })],
                         width: { size: 65, type: WidthType.PERCENTAGE },
@@ -95,7 +95,7 @@ function makeFooter() {
                                 margins: { top: 60, bottom: 60, left: 60, right: 60 },
                                 children: [new Paragraph({
                                     children: [new TextRun({
-                                        text: 'ООО «Инженеры информации», ООО «ЦПИ Эксперт»        тел (8443) 300-800, (8442) 300-800        e-mail: mail@enginf.ru',
+                                        text: 'ООО «Инженеры информации»    тел (8443) 300-800, (8442) 300-800        e-mail: mail@enginf.ru',
                                         size: 16,
                                     })],
                                     alignment: AlignmentType.CENTER,
@@ -151,14 +151,9 @@ function makeSectionArticlesTable(articles) {
 
 router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter, async (req, res) => {
     try {
-        const { issueNumber, dateFrom, dateTo, title } = req.query;
-        if (!issueNumber || !dateFrom || !dateTo) {
-            return res.status(400).json({ success: false, message: 'issueNumber, dateFrom, dateTo обязательны' });
-        }
-
-        // issueNumber — только цифры (попадает в имя файла в Content-Disposition)
-        if (!/^\d+$/.test(issueNumber)) {
-            return res.status(400).json({ success: false, message: 'issueNumber должен быть числом' });
+        const { dateFrom, dateTo } = req.query;
+        if (!dateFrom || !dateTo) {
+            return res.status(400).json({ success: false, message: 'dateFrom, dateTo обязательны' });
         }
 
         const dateFromObj = new Date(dateFrom);
@@ -171,7 +166,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
         dateToObj.setHours(23, 59, 59, 999);
 
         const fmtDate = (d) => d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-        const issueDateStr = `с ${fmtDate(dateFromObj)} по ${fmtDate(dateToObj)}`;
+        const issueDateStr = `${fmtDate(dateFromObj)} – ${fmtDate(dateToObj)}`;
 
         // Шапочное изображение
         let headerImageBuffer = null;
@@ -253,11 +248,22 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
             bodyChildren.push(new Paragraph({ children: [], spacing: { after: 80 } }));
         }
 
-        if (bodyChildren.length === 0 || (bodyChildren.length === 1 && title && title.trim())) {
+        if (bodyChildren.length === 0) {
             bodyChildren.push(new Paragraph({
                 children: [new TextRun({ text: 'Статьи за выбранный период не найдены.', size: 20 })],
             }));
         }
+
+        // Дисклеймер — plain text, не в рамке, после всех статей
+        bodyChildren.push(new Paragraph({
+            children: [new TextRun({
+                text: 'Обзор подготовлен специалистами ООО «Инженеры информации» - информационным центром Сети КонсультантПлюс в г. Волгограде и г. Волжском.',
+                size: 18,
+                italics: true,
+            })],
+            alignment: AlignmentType.LEFT,
+            spacing: { before: 120, after: 0 },
+        }));
 
         // Первая страница: логотип + таблица-колонтитул
         // Заголовок выпуска перенесён в тело документа
@@ -273,38 +279,15 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
                 spacing: { after: 30 },
             }));
         }
-        firstHeaderChildren.push(makeIssueTable(issueNumber, issueDateStr));
-
-        // Заголовок выпуска — в first-page header (единственный рабочий способ сделать
-        // full-width заголовок + статьи на стр.1; CONTINUOUS+смена колонок = broken в docx)
-        if (title && title.trim()) {
-            firstHeaderChildren.push(new Paragraph({
-                children: [new TextRun({
-                    text: title.trim().toUpperCase(),
-                    bold: true,
-                    size: 40,
-                    font: 'Comic Sans MS',
-                })],
-                alignment: AlignmentType.CENTER,
-                border: {
-                    top: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                    bottom: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                    left: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                    right: { style: BorderStyle.SINGLE, size: 8, color: '000000' },
-                },
-                spacing: { before: 60, after: 60 },
-            }));
-        }
+        firstHeaderChildren.push(makeIssueTable(issueDateStr));
 
         const pageSize = { width: mm(210), height: mm(297) };
         const commonMargin = { right: mm(15), bottom: mm(20), left: mm(15), header: mm(8), footer: mm(10) };
 
-        // top = расстояние от верха до текста тела. Должен вместить первостраничную шапку:
-        //   header(8) + logo(~24) + issue(~12) + [title(~20)] + зазор(~3) ≈ 67мм → mm(58) tight fit
-        // Все страницы имеют одинаковый top → стр.2+ имеют лишний отступ (неизбежно).
-        // top = mm(28) для всех страниц. На стр.1 шапка (лого+issue+[title]) может быть
-        // выше mm(28) — Word авто-расширяет под контент. Стр.2+ получают компактный отступ.
-        const top = mm(28);
+        // top = mm(18): -10мм от предыдущего mm(28) по запросу пользователя.
+        // На стр.1 шапка (лого+issue) ~36мм > 18мм — Word авто-расширяет.
+        // Стр.2+ (только issue ~16мм) получают минимальный отступ.
+        const top = mm(18);
 
         const docSections = [{
             properties: {
@@ -314,7 +297,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
             },
             headers: {
                 first: new Header({ children: firstHeaderChildren }),
-                default: new Header({ children: [makeIssueTable(issueNumber, issueDateStr)] }),
+                default: new Header({ children: [makeIssueTable(issueDateStr)] }),
             },
             footers: { default: makeFooter(), first: makeFooter() },
             children: bodyChildren,
@@ -322,7 +305,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
 
         const doc = new Document({ sections: docSections });
         const buffer = await Packer.toBuffer(doc);
-        const filename = `Pro-obzor-N${issueNumber}.docx`;
+        const filename = `Pro-obzor-${dateFrom}-${dateTo}.docx`;
         const encodedName = encodeURIComponent(filename);
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');

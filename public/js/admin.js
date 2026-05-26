@@ -1993,11 +1993,11 @@ async function loadArticlesSection() {
     if (addBtn) addBtn.style.display = canCreate ? '' : 'none';
     if (manageSectionsBtn) manageSectionsBtn.style.display = canCreate ? '' : 'none';
 
-    // Блок шапочной картинки — только admins
-    const isAdmin = PermissionsManager.has('isAdmin');
+    // Блок шапочной картинки — admins + пользователи с правом создания статей
+    const canManageHeader = PermissionsManager.has('isAdmin') || PermissionsManager.has('canCreateArticles');
     const headerSection = document.getElementById('headerImageSection');
-    if (headerSection) headerSection.style.display = isAdmin ? '' : 'none';
-    if (isAdmin) await loadHeaderImage();
+    if (headerSection) headerSection.style.display = canManageHeader ? '' : 'none';
+    if (canManageHeader) await loadHeaderImage();
 }
 
 async function loadHeaderImage() {

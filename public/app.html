@@ -880,12 +880,8 @@
 
                     <!-- Про-обзор -->
                     <div id="proReviewTab" style="display:none;">
-                        <h4 class="mb-3">Про-обзор</h4>
+                        <h4 class="mb-3">Обзор НЗ</h4>
                         <div class="row mb-3 g-2">
-                            <div class="col-md-2">
-                                <label class="form-label">Номер выпуска</label>
-                                <input type="number" class="form-control" id="proIssueNumber" min="1" placeholder="№">
-                            </div>
                             <div class="col-md-3">
                                 <label class="form-label">Период от</label>
                                 <input type="date" class="form-control" id="proDateFrom">
@@ -893,15 +889,6 @@
                             <div class="col-md-3">
                                 <label class="form-label">Период до</label>
                                 <input type="date" class="form-control" id="proDateTo">
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="proTitleToggle">
-                                <label class="form-check-label fw-bold" for="proTitleToggle">Добавить заголовок обзора</label>
-                            </div>
-                            <div id="proTitleField" style="display:none;" class="mt-2">
-                                <input type="text" class="form-control" id="proTitleInput" placeholder="Введите заголовок обзора...">
                             </div>
                         </div>
                         <button class="btn btn-primary" id="generateProBtn">
