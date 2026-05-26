@@ -2716,7 +2716,7 @@ async function generateProReview() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Pro-obzor-${dateFrom}-${dateTo}.docx`;
+        a.download = `Obzor-nz-${dateFrom}-${dateTo}.docx`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

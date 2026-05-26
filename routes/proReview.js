@@ -305,7 +305,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
 
         const doc = new Document({ sections: docSections });
         const buffer = await Packer.toBuffer(doc);
-        const filename = `Pro-obzor-${dateFrom}-${dateTo}.docx`;
+        const filename = `Obzor-nz-${dateFrom}-${dateTo}.docx`;
         const encodedName = encodeURIComponent(filename);
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
