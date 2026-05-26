@@ -218,13 +218,6 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
         // Тело документа
         const bodyChildren = [];
 
-        // Spacer только для стр.1: добавляет 5мм отступа от колонтитула.
-        // На стр.2+ этот параграф уже "съеден" и не повторяется.
-        bodyChildren.push(new Paragraph({
-            children: [new TextRun({ text: '', size: 1 })],
-            spacing: { before: 0, after: mm(5) },
-        }));
-
         for (const section of allSections) {
             const arts = sectionArticles.get(section.id) || [];
             if (arts.length === 0) continue;
@@ -294,7 +287,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
         // top = mm(18): -10мм от предыдущего mm(28) по запросу пользователя.
         // На стр.1 шапка (лого+issue) ~36мм > 18мм — Word авто-расширяет.
         // Стр.2+ (только issue ~16мм) получают минимальный отступ.
-        const top = mm(18);
+        const top = mm(23);
 
         const docSections = [{
             properties: {
