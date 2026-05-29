@@ -2001,6 +2001,27 @@ async function loadArticlesSection() {
     if (canManageHeader) await loadHeaderImage();
 }
 
+function applyAdminArticleFilters() {
+    const dateFrom = document.getElementById('adminDateFrom')?.value;
+    const dateTo = document.getElementById('adminDateTo')?.value;
+    const checked = Array.from(document.querySelectorAll('.admin-section-cb:checked')).map(cb => Number(cb.value));
+
+    let filtered = allArticles;
+    if (dateFrom) {
+        const from = new Date(dateFrom);
+        filtered = filtered.filter(a => new Date(a.publishedAt || a.createdAt) >= from);
+    }
+    if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(a => new Date(a.publishedAt || a.createdAt) <= to);
+    }
+    if (checked.length > 0) {
+        filtered = filtered.filter(a => (a.sections || []).some(s => checked.includes(s.id)));
+    }
+    renderArticles(filtered);
+}
+
 let adminSectionFilterInit = false;
 function initAdminArticleSectionFilter() {
     const filtersEl = document.getElementById('adminArticleSectionFilters');
@@ -2017,12 +2038,13 @@ function initAdminArticleSectionFilter() {
 
     if (!adminSectionFilterInit) {
         adminSectionFilterInit = true;
-        boxesEl.addEventListener('change', () => {
-            const checked = Array.from(document.querySelectorAll('.admin-section-cb:checked')).map(cb => Number(cb.value));
-            const filtered = checked.length === 0
-                ? allArticles
-                : allArticles.filter(a => (a.sections || []).some(s => checked.includes(s.id)));
-            renderArticles(filtered);
+        boxesEl.addEventListener('change', applyAdminArticleFilters);
+        document.getElementById('adminDateFrom')?.addEventListener('change', applyAdminArticleFilters);
+        document.getElementById('adminDateTo')?.addEventListener('change', applyAdminArticleFilters);
+        document.getElementById('adminDateClear')?.addEventListener('click', () => {
+            document.getElementById('adminDateFrom').value = '';
+            document.getElementById('adminDateTo').value = '';
+            applyAdminArticleFilters();
         });
     }
 }

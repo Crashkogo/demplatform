@@ -761,9 +761,18 @@
                             </div>
                         </div>
 
-                        <!-- Фильтр по разделам -->
-                        <div id="adminArticleSectionFilters" style="display:none;" class="mb-3">
-                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <!-- Фильтры: период + разделы -->
+                        <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-muted small">С:</span>
+                                <input type="date" class="form-control form-control-sm" id="adminDateFrom" style="width:145px;">
+                                <span class="text-muted small">По:</span>
+                                <input type="date" class="form-control form-control-sm" id="adminDateTo" style="width:145px;">
+                                <button class="btn btn-sm btn-outline-secondary" id="adminDateClear" title="Сбросить период">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                            <div id="adminArticleSectionFilters" style="display:none;" class="d-flex align-items-center gap-2 flex-wrap">
                                 <span class="text-muted small">Разделы:</span>
                                 <div id="adminArticleSectionCheckboxes" class="d-flex flex-wrap gap-2"></div>
                             </div>
