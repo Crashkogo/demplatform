@@ -2749,7 +2749,7 @@ async function generateProReview(format = 'docx') {
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = isPdf
-                ? '<i class="bi bi-file-earmark-pdf me-2"></i>PDF'
+                ? '<i class="bi bi-file-earmark-pdf me-2"></i>Сформировать PDF'
                 : '<i class="bi bi-file-earmark-word me-2"></i>Сформировать DOCX';
         }
     }
