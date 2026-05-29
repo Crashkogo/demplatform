@@ -252,7 +252,10 @@ router.put('/articles/:id', authenticateToken, canCreate, writeLimiter, async (r
         if (publishedAt) updateData.publishedAt = new Date(publishedAt);
         await article.update(updateData);
 
-        if (Array.isArray(sectionIds)) {
+        // Обновляем разделы только если клиент явно передал непустой массив.
+        // Пустой массив от клиента игнорируем — это защита от потери разделов
+        // при гонке (allArticleSections не загружены, checkboxes пусты).
+        if (Array.isArray(sectionIds) && sectionIds.length > 0) {
             const sections = await ArticleSection.findAll({ where: { id: sectionIds } });
             await article.setSections(sections);
         }

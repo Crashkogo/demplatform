@@ -2256,6 +2256,7 @@ async function showArticleForm(articleId) {
     if (articleId) {
         document.getElementById('articleFormTitle').textContent = 'Редактирование статьи';
         try {
+            if (!allArticleSections || allArticleSections.length === 0) await loadArticleSections();
             const response = await axios.get(`/api/articles/${articleId}`);
             if (response.data.success) {
                 const a = response.data.data;
