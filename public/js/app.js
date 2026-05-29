@@ -2700,24 +2700,30 @@ function initProReviewForm() {
     if (dateToInput) dateToInput.addEventListener('change', updateBtnState);
 
     if (generateBtn) {
-        generateBtn.addEventListener('click', generateProReview);
+        generateBtn.addEventListener('click', () => generateProReview('docx'));
+    }
+    const pdfBtn = document.getElementById('generateProPdfBtn');
+    if (pdfBtn) {
+        pdfBtn.addEventListener('click', () => generateProReview('pdf'));
     }
 }
 
-async function generateProReview() {
+async function generateProReview(format = 'docx') {
     const dateFrom = document.getElementById('proDateFrom')?.value;
     const dateTo = document.getElementById('proDateTo')?.value;
 
     if (!dateFrom || !dateTo) return;
 
-    const generateBtn = document.getElementById('generateProBtn');
-    if (generateBtn) {
-        generateBtn.disabled = true;
-        generateBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Формирование...';
+    const isPdf = format === 'pdf';
+    const btn = document.getElementById(isPdf ? 'generateProPdfBtn' : 'generateProBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Формирование...';
     }
 
     try {
         const params = new URLSearchParams({ dateFrom, dateTo });
+        if (isPdf) params.set('format', 'pdf');
 
         const response = await fetch(`/api/pro-review/generate?${params}`, { credentials: 'include' });
 
@@ -2731,18 +2737,20 @@ async function generateProReview() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Obzor-nz-${dateFrom}-${dateTo}.docx`;
+        a.download = `Obzor-nz-${dateFrom}-${dateTo}.${isPdf ? 'pdf' : 'docx'}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     } catch (err) {
         console.error('Ошибка генерации:', err);
-        alert('Ошибка генерации DOCX: ' + err.message);
+        alert(`Ошибка генерации ${isPdf ? 'PDF' : 'DOCX'}: ` + err.message);
     } finally {
-        if (generateBtn) {
-            generateBtn.disabled = false;
-            generateBtn.innerHTML = '<i class="bi bi-file-earmark-word me-2"></i>Сформировать DOCX';
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = isPdf
+                ? '<i class="bi bi-file-earmark-pdf me-2"></i>PDF'
+                : '<i class="bi bi-file-earmark-word me-2"></i>Сформировать DOCX';
         }
     }
 }

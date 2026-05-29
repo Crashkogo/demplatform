@@ -104,6 +104,43 @@ class ConvertService {
      * Очищает временную директорию
      * @param {string} dirPath - Путь к директории
      */
+
+    /**
+     * Конвертирует DOCX Buffer в PDF через LibreOffice
+     * @param {Buffer} docxBuffer
+     * @returns {Promise<Buffer>}
+     */
+    async convertDocxBufferToPDF(docxBuffer) {
+        const uniqueDir = path.join(this.tempDir, `docx2pdf-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+        fs.mkdirSync(uniqueDir, { recursive: true });
+        const inputPath = path.join(uniqueDir, 'input.docx');
+        fs.writeFileSync(inputPath, docxBuffer);
+
+        return new Promise((resolve, reject) => {
+            const command = `soffice --headless --convert-to pdf --outdir "${uniqueDir}" "${inputPath}"`;
+            exec(command, { timeout: 90000 }, (error) => {
+                if (error) {
+                    this.cleanupDir(uniqueDir);
+                    return reject(new Error(`LibreOffice error: ${error.message}`));
+                }
+                const files = fs.readdirSync(uniqueDir);
+                const pdfFile = files.find(f => f.endsWith('.pdf'));
+                if (!pdfFile) {
+                    this.cleanupDir(uniqueDir);
+                    return reject(new Error('PDF не создан'));
+                }
+                try {
+                    const pdfBuffer = fs.readFileSync(path.join(uniqueDir, pdfFile));
+                    this.cleanupDir(uniqueDir);
+                    resolve(pdfBuffer);
+                } catch (e) {
+                    this.cleanupDir(uniqueDir);
+                    reject(e);
+                }
+            });
+        });
+    }
+
     cleanupDir(dirPath) {
         try {
             if (fs.existsSync(dirPath)) {

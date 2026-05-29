@@ -13,6 +13,7 @@ const {
 
 const { Article, ArticleSection, HeaderImage, User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
+const convertService = require('../services/convertService');
 const { htmlToDocxParagraphs } = require('../utils/htmlToDocx');
 const { writeLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
@@ -118,13 +119,13 @@ function makeSectionArticlesTable(articles) {
 
     const rows = articles.map((article) => {
         const titlePara = new Paragraph({
-            children: [new TextRun({ text: article.title, size: 18, italics: true })],
+            children: [new TextRun({ text: article.title, size: 18, bold: true })],
             alignment: AlignmentType.CENTER,
             shading: { type: ShadingType.SOLID, color: 'D9D9D9', fill: 'D9D9D9' },
             border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' } },
             spacing: { before: 40, after: 40 },
         });
-        const contentParas = htmlToDocxParagraphs(article.content, { size: 20 });
+        const contentParas = htmlToDocxParagraphs(article.content, { size: 18 });
         return new TableRow({
             children: [
                 new TableCell({
@@ -151,7 +152,7 @@ function makeSectionArticlesTable(articles) {
 
 router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter, async (req, res) => {
     try {
-        const { dateFrom, dateTo } = req.query;
+        const { dateFrom, dateTo, format } = req.query;
         if (!dateFrom || !dateTo) {
             return res.status(400).json({ success: false, message: 'dateFrom, dateTo обязательны' });
         }
@@ -305,14 +306,24 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
         }];
 
         const doc = new Document({ sections: docSections });
-        const buffer = await Packer.toBuffer(doc);
+        const docxBuffer = await Packer.toBuffer(doc);
+
+        if (format === 'pdf') {
+            const pdfBuffer = await convertService.convertDocxBufferToPDF(docxBuffer);
+            const filename = `Obzor-nz-${dateFrom}-${dateTo}.pdf`;
+            const encodedName = encodeURIComponent(filename);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedName}`);
+            res.setHeader('Content-Length', pdfBuffer.length);
+            return res.send(pdfBuffer);
+        }
+
         const filename = `Obzor-nz-${dateFrom}-${dateTo}.docx`;
         const encodedName = encodeURIComponent(filename);
-
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedName}`);
-        res.setHeader('Content-Length', buffer.length);
-        res.send(buffer);
+        res.setHeader('Content-Length', docxBuffer.length);
+        res.send(docxBuffer);
 
     } catch (err) {
         logger.error('GET /pro-review/generate:', err);
