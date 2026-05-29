@@ -2616,6 +2616,21 @@ function initModeSwitcher() {
     const searchBtn = document.querySelector('#articlesListTab .btn-outline-primary');
     if (searchBtn) searchBtn.addEventListener('click', () => loadAppArticles());
 
+    // Клик по карточке статьи — открыть полный просмотр
+    const articlesList = document.getElementById('appArticlesList');
+    if (articlesList) {
+        articlesList.addEventListener('click', async (e) => {
+            const card = e.target.closest('.article-card-clickable');
+            if (!card) return;
+            const id = card.dataset.articleId;
+            if (!id) return;
+            try {
+                const resp = await axios.get(`/api/articles/${id}`);
+                if (resp.data.success) openArticleViewModal(resp.data.data);
+            } catch (err) { console.error('Ошибка загрузки статьи:', err); }
+        });
+    }
+
     const searchInput = document.getElementById('articleSearchInput');
     if (searchInput) {
         let timer;
@@ -2838,7 +2853,7 @@ function renderAppArticles(articles, append, total) {
         const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${escapeHtml(s.name)}</span>`).join('');
         const preview = (a.content || '').replace(/<[^>]*>/g, '').substring(0, 200);
         return `
-            <div class="card mb-3 border-0 shadow-sm" style="border-left: 4px solid #667eea !important;">
+            <div class="card mb-3 border-0 shadow-sm article-card-clickable" data-article-id="${a.id}" style="border-left: 4px solid #667eea !important; cursor:pointer;">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-1">
                         <h5 class="mb-0">${escapeHtml(a.title)}</h5>
@@ -2861,4 +2876,15 @@ function renderAppArticles(articles, append, total) {
         btn.querySelector('button').addEventListener('click', () => loadAppArticles(true));
         container.appendChild(btn);
     }
+}
+
+function openArticleViewModal(article) {
+    const modal = document.getElementById('articleViewModal');
+    if (!modal) return;
+    const date = new Date(article.publishedAt || article.createdAt).toLocaleDateString('ru-RU');
+    const sections = (article.sections || []).map(s => escapeHtml(s.name)).join(', ');
+    document.getElementById('articleViewTitle').textContent = article.title;
+    document.getElementById('articleViewMeta').textContent = date + (sections ? ' · ' + sections : '');
+    document.getElementById('articleViewBody').innerHTML = article.content || '';
+    new bootstrap.Modal(modal).show();
 }

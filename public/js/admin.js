@@ -2002,11 +2002,13 @@ async function loadArticlesSection() {
 }
 
 function applyAdminArticleFilters() {
+    const search = document.getElementById('adminArticleSearch')?.value?.trim().toLowerCase();
     const dateFrom = document.getElementById('adminDateFrom')?.value;
     const dateTo = document.getElementById('adminDateTo')?.value;
     const checked = Array.from(document.querySelectorAll('.admin-section-cb:checked')).map(cb => Number(cb.value));
 
     let filtered = allArticles;
+    if (search) filtered = filtered.filter(a => a.title.toLowerCase().includes(search));
     if (dateFrom) {
         const from = new Date(dateFrom);
         filtered = filtered.filter(a => new Date(a.publishedAt || a.createdAt) >= from);
@@ -2040,10 +2042,12 @@ function initAdminArticleSectionFilter() {
         adminSectionFilterInit = true;
         boxesEl.addEventListener('change', applyAdminArticleFilters);
         document.getElementById('adminDateFrom')?.addEventListener('change', applyAdminArticleFilters);
+        document.getElementById('adminArticleSearch')?.addEventListener('input', applyAdminArticleFilters);
         document.getElementById('adminDateTo')?.addEventListener('change', applyAdminArticleFilters);
         document.getElementById('adminDateClear')?.addEventListener('click', () => {
             document.getElementById('adminDateFrom').value = '';
             document.getElementById('adminDateTo').value = '';
+            document.getElementById('adminArticleSearch').value = '';
             applyAdminArticleFilters();
         });
     }

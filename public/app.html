@@ -954,6 +954,22 @@
     <script src="https://cdn.jsdelivr.net/npm/rtf.js@3.0.9/dist/EMFJS.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/rtf.js@3.0.9/dist/RTFJS.bundle.min.js"></script>
 
+    <!-- Модал полного просмотра статьи -->
+    <div class="modal fade" id="articleViewModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title mb-0" id="articleViewTitle"></h5>
+                        <small class="text-muted" id="articleViewMeta"></small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="articleViewBody" style="font-size:0.95rem;line-height:1.7;"></div>
+            </div>
+        </div>
+    </div>
+
     <script src="js/permissions.js"></script>
     <script src="js/app.js"></script>
 </body>

@@ -761,14 +761,18 @@
                             </div>
                         </div>
 
-                        <!-- Фильтры: период + разделы -->
+                        <!-- Фильтры: поиск + период + разделы -->
                         <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
+                            <div class="input-group input-group-sm" style="width:240px;">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control" id="adminArticleSearch" placeholder="Поиск по названию...">
+                            </div>
                             <div class="d-flex align-items-center gap-2">
                                 <span class="text-muted small">С:</span>
                                 <input type="date" class="form-control form-control-sm" id="adminDateFrom" style="width:145px;">
                                 <span class="text-muted small">По:</span>
                                 <input type="date" class="form-control form-control-sm" id="adminDateTo" style="width:145px;">
-                                <button class="btn btn-sm btn-outline-secondary" id="adminDateClear" title="Сбросить период">
+                                <button class="btn btn-sm btn-outline-secondary" id="adminDateClear" title="Сбросить">
                                     <i class="bi bi-x"></i>
                                 </button>
                             </div>
