@@ -2138,7 +2138,7 @@ function initArticleEventListeners() {
 
 async function loadArticles() {
     try {
-        const response = await axios.get('/api/articles');
+        const response = await axios.get('/api/articles', { params: { limit: 1000 } });
         if (response.data.success) {
             allArticles = response.data.data;
             renderArticles(allArticles);
