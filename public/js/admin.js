@@ -1986,6 +1986,7 @@ async function loadArticlesSection() {
     await loadArticleSections();
     await loadArticles();
     initArticleEventListeners();
+    initAdminArticleSectionFilter();
 
     const canCreate = PermissionsManager.has('canCreateArticles');
     const addBtn = document.getElementById('addArticleBtn');
@@ -1998,6 +1999,32 @@ async function loadArticlesSection() {
     const headerSection = document.getElementById('headerImageSection');
     if (headerSection) headerSection.style.display = canManageHeader ? '' : 'none';
     if (canManageHeader) await loadHeaderImage();
+}
+
+let adminSectionFilterInit = false;
+function initAdminArticleSectionFilter() {
+    const filtersEl = document.getElementById('adminArticleSectionFilters');
+    const boxesEl = document.getElementById('adminArticleSectionCheckboxes');
+    if (!filtersEl || !boxesEl || !allArticleSections || allArticleSections.length === 0) return;
+
+    boxesEl.innerHTML = allArticleSections.map(s => `
+        <label class="badge bg-light text-dark border d-flex align-items-center gap-1" style="cursor:pointer;font-size:0.8rem;font-weight:normal">
+            <input type="checkbox" class="admin-section-cb" value="${s.id}" style="cursor:pointer">
+            ${escapeHtml(s.name)}
+        </label>
+    `).join('');
+    filtersEl.style.display = '';
+
+    if (!adminSectionFilterInit) {
+        adminSectionFilterInit = true;
+        boxesEl.addEventListener('change', () => {
+            const checked = Array.from(document.querySelectorAll('.admin-section-cb:checked')).map(cb => Number(cb.value));
+            const filtered = checked.length === 0
+                ? allArticles
+                : allArticles.filter(a => (a.sections || []).some(s => checked.includes(s.id)));
+            renderArticles(filtered);
+        });
+    }
 }
 
 async function loadHeaderImage() {
