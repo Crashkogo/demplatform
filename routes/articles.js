@@ -156,13 +156,18 @@ router.get('/articles', authenticateToken, canRead, async (req, res) => {
             where.title = { [Op.iLike]: `%${search}%` };
         }
         if (dateFrom || dateTo) {
-            where.publishedAt = {};
-            if (dateFrom) where.publishedAt[Op.gte] = new Date(dateFrom);
+            const dateCondition = {};
+            if (dateFrom) dateCondition[Op.gte] = new Date(dateFrom);
             if (dateTo) {
                 const to = new Date(dateTo);
                 to.setHours(23, 59, 59, 999);
-                where.publishedAt[Op.lte] = to;
+                dateCondition[Op.lte] = to;
             }
+            // Если publishedAt не задан — фильтруем по createdAt (дата создания отображается вместо даты публикации)
+            where[Op.or] = [
+                { publishedAt: dateCondition },
+                { publishedAt: null, createdAt: dateCondition }
+            ];
         }
 
         const include = [
