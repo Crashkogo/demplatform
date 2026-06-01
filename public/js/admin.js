@@ -2028,19 +2028,10 @@ let adminSectionFilterInit = false;
 function initAdminArticleSectionFilter() {
     const filtersEl = document.getElementById('adminArticleSectionFilters');
     const boxesEl = document.getElementById('adminArticleSectionCheckboxes');
-    if (!filtersEl || !boxesEl || !allArticleSections || allArticleSections.length === 0) return;
 
-    boxesEl.innerHTML = allArticleSections.map(s => `
-        <label class="badge bg-light text-dark border d-flex align-items-center gap-1" style="cursor:pointer;font-size:0.8rem;font-weight:normal">
-            <input type="checkbox" class="admin-section-cb" value="${s.id}" style="cursor:pointer">
-            ${escapeHtml(s.name)}
-        </label>
-    `).join('');
-    filtersEl.style.display = '';
-
+    // Слушатели поиска и дат вешаем всегда — независимо от наличия разделов
     if (!adminSectionFilterInit) {
         adminSectionFilterInit = true;
-        boxesEl.addEventListener('change', applyAdminArticleFilters);
         document.getElementById('adminDateFrom')?.addEventListener('change', applyAdminArticleFilters);
         document.getElementById('adminArticleSearch')?.addEventListener('input', applyAdminArticleFilters);
         document.getElementById('adminDateTo')?.addEventListener('change', applyAdminArticleFilters);
@@ -2050,7 +2041,19 @@ function initAdminArticleSectionFilter() {
             document.getElementById('adminArticleSearch').value = '';
             applyAdminArticleFilters();
         });
+        if (boxesEl) boxesEl.addEventListener('change', applyAdminArticleFilters);
     }
+
+    // Чекбоксы разделов — только если разделы есть
+    if (!filtersEl || !boxesEl || !allArticleSections || allArticleSections.length === 0) return;
+
+    boxesEl.innerHTML = allArticleSections.map(s => `
+        <label class="badge bg-light text-dark border d-flex align-items-center gap-1" style="cursor:pointer;font-size:0.8rem;font-weight:normal">
+            <input type="checkbox" class="admin-section-cb" value="${s.id}" style="cursor:pointer">
+            ${escapeHtml(s.name)}
+        </label>
+    `).join('');
+    filtersEl.style.display = '';
 }
 
 async function loadHeaderImage() {
