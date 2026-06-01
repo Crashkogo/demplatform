@@ -1980,6 +1980,8 @@ function resetHistoryFiltersAndLoad() {
 
 let allArticles = [];
 let allArticleSections = [];
+let _adminArticlesOffset = 0;
+const ADMIN_ARTICLES_PAGE_SIZE = 50;
 let articleTinyMCE = null;
 
 async function loadArticlesSection() {
@@ -2002,26 +2004,8 @@ async function loadArticlesSection() {
 }
 
 function applyAdminArticleFilters() {
-    const search = document.getElementById('adminArticleSearch')?.value?.trim().toLowerCase();
-    const dateFrom = document.getElementById('adminDateFrom')?.value;
-    const dateTo = document.getElementById('adminDateTo')?.value;
-    const checked = Array.from(document.querySelectorAll('.admin-section-cb:checked')).map(cb => Number(cb.value));
-
-    let filtered = allArticles;
-    if (search) filtered = filtered.filter(a => a.title.toLowerCase().includes(search));
-    if (dateFrom) {
-        const from = new Date(dateFrom);
-        filtered = filtered.filter(a => new Date(a.publishedAt || a.createdAt) >= from);
-    }
-    if (dateTo) {
-        const to = new Date(dateTo);
-        to.setHours(23, 59, 59, 999);
-        filtered = filtered.filter(a => new Date(a.publishedAt || a.createdAt) <= to);
-    }
-    if (checked.length > 0) {
-        filtered = filtered.filter(a => (a.sections || []).some(s => checked.includes(s.id)));
-    }
-    renderArticles(filtered);
+    _adminArticlesOffset = 0;
+    loadArticles(false);
 }
 
 let adminSectionFilterInit = false;
@@ -2139,26 +2123,55 @@ function initArticleEventListeners() {
     });
 }
 
-async function loadArticles() {
+async function loadArticles(append = false) {
+    const tbody = document.getElementById('articlesTableBody');
+    if (!append && tbody) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div></td></tr>';
+        _adminArticlesOffset = 0;
+    }
     try {
-        const response = await axios.get('/api/articles', { params: { limit: 1000 } });
+        const params = {
+            limit: ADMIN_ARTICLES_PAGE_SIZE,
+            offset: _adminArticlesOffset,
+        };
+        const search = document.getElementById('adminArticleSearch')?.value?.trim();
+        const dateFrom = document.getElementById('adminDateFrom')?.value;
+        const dateTo = document.getElementById('adminDateTo')?.value;
+        const checkedSections = Array.from(document.querySelectorAll('.admin-section-cb:checked')).map(cb => cb.value);
+        if (search) params.search = search;
+        if (dateFrom) params.dateFrom = dateFrom;
+        if (dateTo) params.dateTo = dateTo;
+        if (checkedSections.length > 0) params.sectionIds = checkedSections;
+
+        const response = await axios.get('/api/articles', { params });
         if (response.data.success) {
-            allArticles = response.data.data;
-            renderArticles(allArticles);
+            const { data: articles, total } = response.data;
+            if (append) {
+                allArticles = allArticles.concat(articles);
+            } else {
+                allArticles = articles;
+            }
+            _adminArticlesOffset += articles.length;
+            renderArticles(articles, append, total);
         }
     } catch (err) {
         showError('Ошибка загрузки статей');
     }
 }
 
-function renderArticles(articles) {
+function renderArticles(articles, append = false, total = 0) {
     const tbody = document.getElementById('articlesTableBody');
+    const loadMoreEl = document.getElementById('adminArticlesLoadMore');
     if (!tbody) return;
-    tbody.innerHTML = '';
-    if (articles.length === 0) {
+
+    if (!append) tbody.innerHTML = '';
+
+    if (!append && articles.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Статьи не найдены</td></tr>';
+        if (loadMoreEl) loadMoreEl.style.display = 'none';
         return;
     }
+
     const canEdit = PermissionsManager.has('canCreateArticles');
     articles.forEach(a => {
         const date = new Date(a.publishedAt || a.createdAt).toLocaleDateString('ru-RU');
@@ -2181,6 +2194,17 @@ function renderArticles(articles) {
         `;
         tbody.appendChild(row);
     });
+
+    if (loadMoreEl) {
+        if (_adminArticlesOffset < total) {
+            const remaining = total - _adminArticlesOffset;
+            loadMoreEl.style.display = '';
+            loadMoreEl.innerHTML = `<button class="btn btn-outline-secondary btn-sm">Загрузить ещё (${remaining} статей)</button>`;
+            loadMoreEl.querySelector('button').onclick = () => loadArticles(true);
+        } else {
+            loadMoreEl.style.display = 'none';
+        }
+    }
 }
 
 async function loadArticleSections() {
