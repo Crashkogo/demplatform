@@ -140,7 +140,7 @@ router.delete('/article-sections/:id', authenticateToken, canCreate, writeLimite
 router.get('/articles', authenticateToken, canRead, async (req, res) => {
     try {
         const { search, dateFrom, dateTo } = req.query;
-        const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+        const limit = Math.min(parseInt(req.query.limit, 10) || 50, 2000);
         const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
         // sectionIds может прийти как строка "1" или массив ["1","2"]
