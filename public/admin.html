@@ -956,10 +956,10 @@
                             <input type="password" class="form-control" id="userPassword" required>
                         </div>
                         <div class="mb-3">
-                            <label for="userRole" class="form-label">Роль</label>
-                            <select class="form-select" id="userRole" required>
-                                <option value="">Выберите роль</option>
-                            </select>
+                            <label class="form-label">Роли <small class="text-muted">(выберите одну или несколько)</small></label>
+                            <div id="userRolesContainer" class="border rounded p-2" style="max-height:200px;overflow-y:auto;">
+                                <span class="text-muted small">Загрузка...</span>
+                            </div>
                         </div>
                     </form>
                 </div>

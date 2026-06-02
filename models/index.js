@@ -30,17 +30,23 @@ User.hasMany(Material, {
     foreignKey: 'uploadedBy' 
 });
 
-// === СВЯЗИ ДЛЯ ROLE (НОВОЕ) ===
+// === СВЯЗИ ДЛЯ ROLE ===
 
-// User -> Role (многие к одному)
-User.belongsTo(Role, {
-    foreignKey: 'roleId',
-    as: 'roleData'
+// User <-> Role (многие ко многим через user_roles)
+User.belongsToMany(Role, {
+    through: 'user_roles',
+    foreignKey: 'user_id',
+    otherKey: 'role_id',
+    as: 'roles',
+    timestamps: false
 });
 
-Role.hasMany(User, {
-    foreignKey: 'roleId',
-    as: 'users'
+Role.belongsToMany(User, {
+    through: 'user_roles',
+    foreignKey: 'role_id',
+    otherKey: 'user_id',
+    as: 'users',
+    timestamps: false
 });
 
 // Role <-> Category (многие ко многим)

@@ -492,19 +492,15 @@ function renderUsers(users) {
         const createdDate = new Date(user.createdAt).toLocaleDateString('ru-RU');
         const lastLogin = user.lastLogin ? new Date(user.lastLogin).toLocaleDateString('ru-RU') : 'Никогда';
 
-        // Определяем название роли и цвет бейджа
-        let roleName = 'Не назначена';
-        let badgeClass = 'bg-secondary';
+        // Бейджи для всех назначенных ролей
+        const userRoles = user.roles || [];
+        const rolesBadges = userRoles.length > 0
+            ? userRoles.map(r => {
+                const cls = r.isAdmin ? 'bg-danger' : 'bg-success';
+                return `<span class="badge ${cls} me-1">${escapeHtml(r.name)}</span>`;
+              }).join('')
+            : '<span class="badge bg-secondary">Не назначена</span>';
 
-        if (user.roleId && allRoles.length > 0) {
-            const role = allRoles.find(r => r.id === user.roleId);
-            if (role) {
-                roleName = role.name;
-                badgeClass = role.isAdmin ? 'bg-danger' : 'bg-success';
-            }
-        }
-
-        // Формируем кнопки управления с учетом прав
         let actionsHTML = '';
         if (PermissionsManager.has('canEditUsers')) {
             actionsHTML += `
@@ -526,11 +522,7 @@ function renderUsers(users) {
 
         row.innerHTML = `
             <td>${user.login}</td>
-            <td>
-                <span class="badge ${badgeClass}">
-                    ${roleName}
-                </span>
-            </td>
+            <td>${rolesBadges}</td>
             <td>${createdDate}</td>
             <td>${lastLogin}</td>
             <td>${actionsHTML}</td>
@@ -563,9 +555,9 @@ async function editUser(userId) {
     document.getElementById('userPassword').value = '';
     document.getElementById('userPassword').required = false;
 
-    // Устанавливаем значение после загрузки списка ролей
-    await populateUserRoleSelect();
-    document.getElementById('userRole').value = user.roleId;
+    // Отмечаем текущие роли пользователя
+    const currentRoleIds = (user.roles || []).map(r => r.id);
+    await populateUserRoleCheckboxes(currentRoleIds);
 
     document.getElementById('userModalTitle').textContent = 'Редактировать пользователя';
 
@@ -603,28 +595,22 @@ async function saveUser() {
         const userId = document.getElementById('userId').value;
         const login = document.getElementById('userLogin').value.trim();
         const password = document.getElementById('userPassword').value;
-        const roleValue = document.getElementById('userRole').value;
 
-        if (!login || (!password && !userId) || !roleValue) {
-            showError('Заполните все обязательные поля');
+        const checkedBoxes = Array.from(document.querySelectorAll('.user-role-cb:checked'));
+        const roleIds = checkedBoxes.map(cb => parseInt(cb.value));
+
+        if (!login || (!password && !userId) || roleIds.length === 0) {
+            showError('Заполните все обязательные поля и выберите хотя бы одну роль');
             return;
         }
 
-        const userData = {
-            login,
-            roleId: parseInt(roleValue)
-        };
-
-        if (password) {
-            userData.password = password;
-        }
+        const userData = { login, roleIds };
+        if (password) userData.password = password;
 
         let response;
         if (userId) {
-            // Обновление
             response = await axios.put(`/api/admin/users/${userId}`, userData);
         } else {
-            // Создание
             userData.password = password;
             response = await axios.post('/api/admin/users', userData);
         }
@@ -642,31 +628,37 @@ async function saveUser() {
     }
 }
 
-// Заполнение выпадающего списка ролей для пользователя
-async function populateUserRoleSelect() {
+// Рендер чекбоксов ролей для пользователя
+async function populateUserRoleCheckboxes(selectedIds = []) {
     try {
-        // Загружаем роли, если еще не загружены
         if (allRoles.length === 0) {
             const response = await axios.get('/api/roles');
-            if (response.data.success) {
-                allRoles = response.data.data;
-            }
+            if (response.data.success) allRoles = response.data.data;
         }
 
-        const roleSelect = document.getElementById('userRole');
-        roleSelect.innerHTML = '<option value="">Выберите роль</option>';
+        const container = document.getElementById('userRolesContainer');
+        container.innerHTML = '';
 
-        // Добавляем роли из базы данных
         allRoles.forEach(role => {
-            const option = document.createElement('option');
-            option.value = role.id;
-            option.textContent = role.name + (role.isAdmin ? ' (Администратор)' : '');
-            roleSelect.appendChild(option);
+            const checked = selectedIds.includes(role.id) ? 'checked' : '';
+            const label = role.name + (role.isAdmin ? ' (Администратор)' : '');
+            const div = document.createElement('div');
+            div.className = 'form-check';
+            div.innerHTML = `
+                <input class="form-check-input user-role-cb" type="checkbox" value="${role.id}" id="urole_${role.id}" ${checked}>
+                <label class="form-check-label" for="urole_${role.id}">${escapeHtml(label)}</label>
+            `;
+            container.appendChild(div);
         });
     } catch (error) {
         console.error('Ошибка загрузки ролей:', error);
         showError('Не удалось загрузить список ролей');
     }
+}
+
+// Алиас для совместимости
+async function populateUserRoleSelect() {
+    return populateUserRoleCheckboxes();
 }
 
 // Сброс формы пользователя

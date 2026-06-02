@@ -1,6 +1,23 @@
 const { Category } = require('../models');
 const logger = require('../utils/logger');
 
+// Вспомогательные функции для работы с массивом ролей
+function getRoles(req) {
+    return req.user?.roles || [];
+}
+
+function userIsAdmin(req) {
+    return getRoles(req).some(r => r.isAdmin);
+}
+
+function userHasPermission(req, permission) {
+    return getRoles(req).some(r => r.isAdmin || r[permission] === true);
+}
+
+function userCanManageAllCategories(req) {
+    return getRoles(req).some(r => r.isAdmin || r.canManageAllCategories);
+}
+
 /**
  * Middleware для проверки прав доступа пользователя
  * @param {string} requiredPermission - Требуемое право (например, 'canViewMaterials')
@@ -8,21 +25,19 @@ const logger = require('../utils/logger');
 const checkAccess = (requiredPermission) => {
     return async (req, res, next) => {
         try {
-            // Используем данные роли, уже загруженные authenticateToken
-            const role = req.user.roleData;
+            const roles = getRoles(req);
 
-            // Проверка наличия роли
-            if (!role) {
-                return res.status(403).json({ success: false, message: 'Доступ запрещен: роль не назначена' });
+            if (roles.length === 0) {
+                return res.status(403).json({ success: false, message: 'Доступ запрещен: роли не назначены' });
             }
 
             // Администратор имеет все права
-            if (role.isAdmin) {
+            if (userIsAdmin(req)) {
                 return next();
             }
 
-            // Проверяем наличие требуемого права
-            if (!role[requiredPermission]) {
+            // Проверяем наличие требуемого права хотя бы в одной роли
+            if (!userHasPermission(req, requiredPermission)) {
                 return res.status(403).json({
                     success: false,
                     message: 'Доступ запрещен: недостаточно прав'
@@ -36,23 +51,20 @@ const checkAccess = (requiredPermission) => {
                 'canViewMaterials'
             ];
 
-            // Если право не связано с категориями, разрешаем доступ
             if (!categoryPermissions.includes(requiredPermission)) {
                 return next();
             }
 
-            // Если есть полный доступ ко всем категориям
-            if (role.canManageAllCategories) {
+            // Если хоть одна роль даёт полный доступ ко всем категориям
+            if (userCanManageAllCategories(req)) {
                 return next();
             }
 
             // Определяем ID категории для проверки
             let categoryIdToCheck = req.params.id || req.params.categoryId || req.body.categoryId || req.body.parentId;
 
-            // Для создания категории
             if (requiredPermission === 'canCreateCategories') {
                 if (!categoryIdToCheck) {
-                    // Создание корневой категории разрешено только администратору
                     return res.status(403).json({
                         success: false,
                         message: 'Доступ запрещен: только администратор может создавать корневые категории'
@@ -60,9 +72,7 @@ const checkAccess = (requiredPermission) => {
                 }
             }
 
-            // Если ID категории не указан, запрещаем доступ
             if (!categoryIdToCheck) {
-                // Для просмотра материалов без указания категории - разрешаем (будет фильтрация на уровне запроса)
                 if (requiredPermission === 'canViewMaterials') {
                     return next();
                 }
@@ -72,11 +82,13 @@ const checkAccess = (requiredPermission) => {
                 });
             }
 
-            // Преобразуем в число
             categoryIdToCheck = parseInt(categoryIdToCheck);
 
-            // Проверяем доступ к категории с использованием метода модели
-            const hasAccess = await role.hasCategoryAccess(categoryIdToCheck);
+            // Проверяем доступ к категории хотя бы через одну роль
+            const results = await Promise.all(
+                roles.map(r => r.hasCategoryAccess(categoryIdToCheck))
+            );
+            const hasAccess = results.some(Boolean);
 
             if (!hasAccess) {
                 return res.status(403).json({
@@ -85,9 +97,7 @@ const checkAccess = (requiredPermission) => {
                 });
             }
 
-            // Доступ разрешен
             next();
-
         } catch (error) {
             logger.error('Authorization error:', error);
             res.status(500).json({
@@ -100,31 +110,32 @@ const checkAccess = (requiredPermission) => {
 
 /**
  * Middleware для добавления доступных категорий в запрос
- * Используется для фильтрации данных по доступным категориям
  */
 const addAccessibleCategories = async (req, res, next) => {
     try {
-        // Используем данные роли, уже загруженные authenticateToken
-        const role = req.user.roleData;
+        const roles = getRoles(req);
 
-        if (!role) {
-            logger.error('Роль не найдена для пользователя:', req.user.login);
+        if (roles.length === 0) {
             req.accessibleCategories = [];
             return next();
         }
 
-        logger.debug('Проверка доступа для роли:', role.name, '| isAdmin:', role.isAdmin, '| canManageAllCategories:', role.canManageAllCategories);
+        logger.debug('Проверка доступа, ролей:', roles.map(r => r.name).join(', '));
 
-        // Администратор или полный доступ
-        if (role.isAdmin || role.canManageAllCategories) {
+        if (userIsAdmin(req) || userCanManageAllCategories(req)) {
             logger.debug('Полный доступ ко всем категориям');
             req.accessibleCategories = 'all';
             return next();
         }
 
-        // Получаем доступные категории
-        const accessibleCategories = await role.getAccessibleCategories();
-        req.accessibleCategories = accessibleCategories.map(cat => cat.id);
+        // Объединяем категории всех ролей
+        const map = new Map();
+        for (const role of roles) {
+            const cats = await role.getAccessibleCategories();
+            cats.forEach(c => map.set(c.id, c));
+        }
+
+        req.accessibleCategories = Array.from(map.keys());
         logger.debug('Доступные категории:', req.accessibleCategories);
 
         next();
@@ -134,4 +145,4 @@ const addAccessibleCategories = async (req, res, next) => {
     }
 };
 
-module.exports = { checkAccess, addAccessibleCategories };
+module.exports = { checkAccess, addAccessibleCategories, getRoles, userIsAdmin, userHasPermission };

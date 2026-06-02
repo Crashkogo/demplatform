@@ -22,9 +22,9 @@ const userValidation = [
         .withMessage('Пароль должен содержать хотя бы одну букву')
         .matches(/[0-9]/)
         .withMessage('Пароль должен содержать хотя бы одну цифру'),
-    body('roleId')
-        .isInt({ min: 1 })
-        .withMessage('Необходимо указать корректную роль')
+    body('roleIds')
+        .isArray({ min: 1 })
+        .withMessage('Необходимо назначить хотя бы одну роль')
 ];
 
 // GET /api/admin/stats - Получение статистики
@@ -34,9 +34,16 @@ router.get('/stats', [authenticateToken, requireAdmin], async (req, res) => {
         const { Role } = require('../models');
         const totalUsers = await User.count();
 
-        // Подсчитываем администраторов через роли
-        const adminRole = await Role.findOne({ where: { isAdmin: true } });
-        const adminUsers = adminRole ? await User.count({ where: { roleId: adminRole.id } }) : 0;
+        // Подсчитываем администраторов через таблицу user_roles
+        const adminRoles = await Role.findAll({ where: { isAdmin: true }, attributes: ['id'] });
+        const adminRoleIds = adminRoles.map(r => r.id);
+        let adminUsers = 0;
+        if (adminRoleIds.length > 0) {
+            const [rows] = await sequelize.query(
+                `SELECT COUNT(DISTINCT user_id) AS cnt FROM user_roles WHERE role_id = ANY(ARRAY[${adminRoleIds.join(',')}]::int[])`
+            );
+            adminUsers = parseInt(rows[0]?.cnt || 0);
+        }
         const clientUsers = totalUsers - adminUsers;
 
         // Статистика категорий
@@ -126,16 +133,10 @@ router.get('/stats', [authenticateToken, requireAdmin], async (req, res) => {
 
 // Middleware для проверки доступа к списку пользователей (canViewUsers ИЛИ canViewLogs)
 const canViewUsersList = (req, res, next) => {
-    const role = req.user.roleData;
-
-    if (!role) {
-        return res.status(403).json({ success: false, message: 'Роль не найдена' });
-    }
-
-    if (role.isAdmin || role.canViewUsers || role.canViewLogs) {
+    const { userIsAdmin, userHasPermission } = require('../middleware/authorization');
+    if (userIsAdmin(req) || userHasPermission(req, 'canViewUsers') || userHasPermission(req, 'canViewLogs')) {
         return next();
     }
-
     return res.status(403).json({
         success: false,
         message: 'Доступ запрещен: недостаточно прав для просмотра списка пользователей'
@@ -160,7 +161,8 @@ router.get('/users', [authenticateToken, canViewUsersList], async (req, res) => 
             attributes: { exclude: ['password'] },
             include: [{
                 model: Role,
-                as: 'roleData',
+                as: 'roles',
+                through: { attributes: [] },
                 attributes: ['id', 'name', 'isAdmin']
             }],
             order: [['createdAt', 'DESC']],
@@ -199,12 +201,12 @@ router.post('/users', [writeLimiter, authenticateToken, requireAdmin, ...userVal
             });
         }
 
-        const { login, password, roleId } = req.body;
+        const { login, password, roleIds } = req.body;
 
-        if (!roleId) {
+        if (!roleIds || roleIds.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Необходимо указать роль'
+                message: 'Необходимо указать хотя бы одну роль'
             });
         }
 
@@ -217,13 +219,9 @@ router.post('/users', [writeLimiter, authenticateToken, requireAdmin, ...userVal
             });
         }
 
-        const user = new User({
-            login,
-            password,
-            roleId
-        });
-
+        const user = new User({ login, password });
         await user.save();
+        await user.setRoles(roleIds.map(Number));
 
         res.status(201).json({
             success: true,
@@ -243,7 +241,7 @@ router.post('/users', [writeLimiter, authenticateToken, requireAdmin, ...userVal
 router.put('/users/:id', [writeLimiter, authenticateToken, requireAdmin], async (req, res) => {
     try {
         const { id } = req.params;
-        const { login, roleId, password } = req.body;
+        const { login, roleIds, password } = req.body;
 
         const user = await User.findByPk(id);
         if (!user) {
@@ -265,9 +263,9 @@ router.put('/users/:id', [writeLimiter, authenticateToken, requireAdmin], async 
             user.login = login;
         }
 
-        // Обновляем роль
-        if (roleId !== undefined) {
-            user.roleId = roleId;
+        // Обновляем роли
+        if (Array.isArray(roleIds) && roleIds.length > 0) {
+            await user.setRoles(roleIds.map(Number));
         }
 
         if (password) {
@@ -336,17 +334,12 @@ router.delete('/users/:id', [writeLimiter, authenticateToken, requireAdmin], asy
 
 // Middleware для проверки доступа к списку материалов (любое право на работу с материалами)
 const canAccessMaterialsList = (req, res, next) => {
-    const role = req.user.roleData;
-
-    if (!role) {
-        return res.status(403).json({ success: false, message: 'Роль не найдена' });
-    }
-
-    if (role.isAdmin || role.canViewMaterials || role.canCreateMaterials ||
-        role.canEditMaterials || role.canDeleteMaterials) {
+    const { userIsAdmin, userHasPermission } = require('../middleware/authorization');
+    if (userIsAdmin(req) || userHasPermission(req, 'canViewMaterials') ||
+        userHasPermission(req, 'canCreateMaterials') || userHasPermission(req, 'canEditMaterials') ||
+        userHasPermission(req, 'canDeleteMaterials')) {
         return next();
     }
-
     return res.status(403).json({
         success: false,
         message: 'Доступ запрещен: недостаточно прав для просмотра списка материалов'

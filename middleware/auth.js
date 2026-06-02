@@ -18,7 +18,7 @@ function _setCache(userId, user) {
     _userCache.set(userId, { user, ts: Date.now() });
 }
 
-// Инвалидация кэша конкретного пользователя (смена роли, пароля, логина)
+// Инвалидация кэша конкретного пользователя (смена ролей, пароля, логина)
 function invalidateUserCache(userId) {
     _userCache.delete(Number(userId));
 }
@@ -31,7 +31,6 @@ function invalidateAllUserCache() {
 // Middleware для проверки JWT токена
 const authenticateToken = async (req, res, next) => {
     try {
-        // Читаем токен из httpOnly cookie (приоритет) или из заголовка Authorization
         const token = req.cookies?.authToken || (req.headers['authorization']?.split(' ')[1]);
 
         if (!token) {
@@ -45,17 +44,16 @@ const authenticateToken = async (req, res, next) => {
         const decoded = jwt.verify(token, config.jwtSecret);
         logger.debug('Токен верифицирован для пользователя ID:', decoded.userId);
 
-        // Проверяем кэш — если есть актуальная запись, пропускаем запрос к БД
         let user = _getCached(decoded.userId);
 
         if (!user) {
-            // Загружаем пользователя с ролью
             const { Role } = require('../models');
             user = await User.findByPk(decoded.userId, {
                 attributes: { exclude: ['password'] },
                 include: [{
                     model: Role,
-                    as: 'roleData',
+                    as: 'roles',
+                    through: { attributes: [] },
                     include: [{
                         association: 'allowedCategories',
                         through: { attributes: [] }
@@ -73,63 +71,30 @@ const authenticateToken = async (req, res, next) => {
             });
         }
 
-        // Проверяем наличие роли
-        if (!user.roleData) {
-            logger.error('Роль не найдена для пользователя:', user.login);
-            return res.status(403).json({
-                success: false,
-                message: 'Роль пользователя не найдена. Обратитесь к администратору.'
-            });
-        }
-
         req.user = user;
         next();
     } catch (error) {
         if (error.name === 'JsonWebTokenError') {
-            return res.status(401).json({
-                success: false,
-                message: 'Недействительный токен'
-            });
+            return res.status(401).json({ success: false, message: 'Недействительный токен' });
         }
         if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({
-                success: false,
-                message: 'Срок действия токена истек'
-            });
+            return res.status(401).json({ success: false, message: 'Срок действия токена истек' });
         }
 
         logger.error('Auth middleware error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Внутренняя ошибка сервера'
-        });
+        res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
     }
 };
 
 // Middleware для проверки роли администратора
 const requireAdmin = (req, res, next) => {
     if (!req.user) {
-        return res.status(401).json({
-            success: false,
-            message: 'Требуется аутентификация'
-        });
+        return res.status(401).json({ success: false, message: 'Требуется аутентификация' });
     }
 
-    // Используем уже загруженные данные роли из authenticateToken
-    const role = req.user.roleData;
-
-    if (!role) {
-        return res.status(403).json({
-            success: false,
-            message: 'Роль не назначена'
-        });
-    }
-
-    if (!role.isAdmin) {
-        return res.status(403).json({
-            success: false,
-            message: 'Требуются права администратора'
-        });
+    const roles = req.user.roles || [];
+    if (!roles.some(r => r.isAdmin)) {
+        return res.status(403).json({ success: false, message: 'Требуются права администратора' });
     }
 
     next();
@@ -148,4 +113,4 @@ module.exports = {
     generateToken,
     invalidateUserCache,
     invalidateAllUserCache
-}; 
+};
