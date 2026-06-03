@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { User, Material, Category, sequelize, AuditEvent } = require('../models');
 const { Op } = require('sequelize');
-const { authenticateToken, requireAdmin, invalidateUserCache } = require('../middleware/auth');
+const { authenticateToken, requireAdmin, invalidateUserCache, invalidateUserSessions } = require('../middleware/auth');
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
 const { writeLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
@@ -39,8 +39,11 @@ router.get('/stats', [authenticateToken, requireAdmin], async (req, res) => {
         const adminRoleIds = adminRoles.map(r => r.id);
         let adminUsers = 0;
         if (adminRoleIds.length > 0) {
+            const placeholders = adminRoleIds.map((_, i) => `:id${i}`).join(', ');
+            const replacements = Object.fromEntries(adminRoleIds.map((id, i) => [`id${i}`, id]));
             const [rows] = await sequelize.query(
-                `SELECT COUNT(DISTINCT user_id) AS cnt FROM user_roles WHERE role_id = ANY(ARRAY[${adminRoleIds.join(',')}]::int[])`
+                `SELECT COUNT(DISTINCT user_id) AS cnt FROM user_roles WHERE role_id IN (${placeholders})`,
+                { replacements }
             );
             adminUsers = parseInt(rows[0]?.cnt || 0);
         }
@@ -263,9 +266,10 @@ router.put('/users/:id', [writeLimiter, authenticateToken, requireAdmin], async 
             user.login = login;
         }
 
-        // Обновляем роли
+        // Обновляем роли — инвалидируем все сессии пользователя
         if (Array.isArray(roleIds) && roleIds.length > 0) {
             await user.setRoles(roleIds.map(Number));
+            await invalidateUserSessions(user.id); // все активные токены становятся недействительны
         }
 
         if (password) {
@@ -276,9 +280,12 @@ router.put('/users/:id', [writeLimiter, authenticateToken, requireAdmin], async 
                 });
             }
             user.password = password;
+            // Смена пароля — инвалидируем все сессии
+            await invalidateUserSessions(user.id);
         }
 
         await user.save();
+        // Кэш чистим в любом случае; сессии инвалидированы выше при смене ролей/пароля
         invalidateUserCache(user.id);
 
         res.json({
@@ -349,13 +356,14 @@ const canAccessMaterialsList = (req, res, next) => {
 // GET /api/admin/materials - Получение списка материалов для админки
 router.get('/materials', [authenticateToken, canAccessMaterialsList, addAccessibleCategories], async (req, res) => {
     try {
-        const { page = 1, limit = 1000, search, categoryId, fileType } = req.query;
+        const { page = 1, search, categoryId, fileType } = req.query;
+        const limit = Math.min(parseInt(req.query.limit) || 100, 500);
 
         const options = {
             categoryId,
             fileType,
-            limit: parseInt(limit),
-            offset: (parseInt(page) - 1) * parseInt(limit),
+            limit,
+            offset: (parseInt(page) - 1) * limit,
             accessibleCategoryIds: req.accessibleCategories === 'all' ? null : req.accessibleCategories
         };
 

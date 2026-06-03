@@ -1,4 +1,4 @@
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -34,15 +34,12 @@ class ConvertService {
             const uniqueDir = path.join(this.tempDir, `convert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
             fs.mkdirSync(uniqueDir, { recursive: true });
 
-            // Команда LibreOffice для конвертации
-            // --headless - без GUI
-            // --convert-to pdf - конвертировать в PDF
-            // --outdir - папка для результата
-            const command = `soffice --headless --convert-to pdf --outdir "${uniqueDir}" "${inputPath}"`;
+            // execFile вместо exec — аргументы передаются массивом, инъекция невозможна
+            const args = ['--headless', '--convert-to', 'pdf', '--outdir', uniqueDir, inputPath];
 
-            logger.debug('Запуск конвертации:', command);
+            logger.debug('Запуск конвертации: soffice', args.join(' '));
 
-            exec(command, { timeout: 60000 }, (error, stdout, stderr) => {
+            execFile('soffice', args, { timeout: 60000 }, (error, stdout, stderr) => {
                 if (error) {
                     logger.error('Ошибка конвертации:', error);
                     logger.error('stderr:', stderr);
@@ -117,8 +114,8 @@ class ConvertService {
         fs.writeFileSync(inputPath, docxBuffer);
 
         return new Promise((resolve, reject) => {
-            const command = `soffice --headless --convert-to pdf --outdir "${uniqueDir}" "${inputPath}"`;
-            exec(command, { timeout: 90000 }, (error) => {
+            const args = ['--headless', '--convert-to', 'pdf', '--outdir', uniqueDir, inputPath];
+            execFile('soffice', args, { timeout: 90000 }, (error) => {
                 if (error) {
                     this.cleanupDir(uniqueDir);
                     return reject(new Error(`LibreOffice error: ${error.message}`));

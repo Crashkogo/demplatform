@@ -51,6 +51,13 @@ const proReviewRoutes = require('./routes/proReview');
 
 const app = express();
 
+// За reverse proxy (nginx, Caddy и т.д.) — доверяем первому hop
+// Задаётся через TRUST_PROXY=1 в .env; по умолчанию выключено
+if (process.env.TRUST_PROXY) {
+    const proxyVal = parseInt(process.env.TRUST_PROXY);
+    app.set('trust proxy', isNaN(proxyVal) ? process.env.TRUST_PROXY : proxyVal);
+}
+
 // Функция для получения локального IP адреса
 function getLocalIPAddress() {
     const interfaces = os.networkInterfaces();
@@ -129,16 +136,22 @@ app.use((req, res, next) => {
     }
 });
 
-// CORS
+// CORS — задаётся через ALLOWED_ORIGINS="https://example.com,https://www.example.com" в .env
+// В dev режиме добавляются localhost адреса автоматически
+const defaultOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    `http://${localIP}:3000`,
+    'https://localhost:3000',
+    'https://127.0.0.1:3000',
+    `https://${localIP}:3000`
+];
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : defaultOrigins;
+
 app.use(cors({
-    origin: [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        `http://${localIP}:3000`,
-        'https://localhost:3000',
-        'https://127.0.0.1:3000',
-        `https://${localIP}:3000`
-    ],
+    origin: allowedOrigins,
     credentials: true
 }));
 
@@ -284,9 +297,9 @@ const initializeDatabase = async () => {
         if (!adminExists) {
             const defaultAdmin = await User.create({
                 login: config.defaultAdmin.login,
-                password: config.defaultAdmin.password,
-                roleId: adminRole.id
+                password: config.defaultAdmin.password
             });
+            await defaultAdmin.setRoles([adminRole.id]);
 
             console.log(`👤 Создан администратор по умолчанию: ${config.defaultAdmin.login}`);
         }

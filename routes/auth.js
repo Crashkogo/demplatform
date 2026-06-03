@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { User, Role } = require('../models');
-const { generateToken, authenticateToken } = require('../middleware/auth');
+const { generateToken, authenticateToken, invalidateUserSessions } = require('../middleware/auth');
 const config = require('../config');
 const logger = require('../utils/logger');
 
@@ -125,7 +125,7 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
         user.lastLogin = new Date();
         await user.save();
 
-        const token = generateToken(user.id);
+        const token = generateToken(user.id, user.tokenVersion);
 
         // Получаем объединённые права
         const permissions = await user.getPermissions();
@@ -176,7 +176,9 @@ router.get('/me', authenticateToken, async (req, res) => {
 });
 
 // POST /api/auth/logout
-router.post('/logout', authenticateToken, (req, res) => {
+router.post('/logout', authenticateToken, async (req, res) => {
+    // Инкрементируем tokenVersion — все активные токены пользователя становятся недействительными
+    await invalidateUserSessions(req.user.id);
     res.clearCookie('authToken', { httpOnly: true, secure: isProd, sameSite: 'strict' });
     res.json({ success: true, message: 'Успешный выход из системы' });
 });

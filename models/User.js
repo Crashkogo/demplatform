@@ -123,6 +123,14 @@ User.init({
     lastLogin: {
         type: DataTypes.DATE,
         allowNull: true
+    },
+    // Версия токена — инкрементируется при принудительном логауте/смене ролей.
+    // JWT включает tokenVersion; если не совпадает с БД — токен отклоняется.
+    tokenVersion: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        allowNull: false,
+        field: 'token_version'
     }
 }, {
     sequelize,

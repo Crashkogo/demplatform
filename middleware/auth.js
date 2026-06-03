@@ -23,6 +23,18 @@ function invalidateUserCache(userId) {
     _userCache.delete(Number(userId));
 }
 
+// Принудительный логаут пользователя — инкрементирует tokenVersion в БД.
+// Все активные токены становятся недействительными немедленно после очистки кэша.
+async function invalidateUserSessions(userId) {
+    try {
+        const { User } = require('../models');
+        await User.increment('tokenVersion', { where: { id: userId } });
+        invalidateUserCache(userId);
+    } catch (err) {
+        logger.error('Ошибка инвалидации сессий пользователя:', err);
+    }
+}
+
 // Инвалидация всего кэша (при изменении прав роли)
 function invalidateAllUserCache() {
     _userCache.clear();
@@ -71,6 +83,12 @@ const authenticateToken = async (req, res, next) => {
             });
         }
 
+        // Проверяем версию токена — защита от использования старых токенов
+        // после принудительного логаута или смены ролей
+        if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+            return res.status(401).json({ success: false, message: 'Токен отозван. Войдите снова.' });
+        }
+
         req.user = user;
         next();
     } catch (error) {
@@ -101,8 +119,9 @@ const requireAdmin = (req, res, next) => {
 };
 
 // Функция для генерации JWT токена
-const generateToken = (userId) => {
-    return jwt.sign({ userId }, config.jwtSecret, {
+// tokenVersion включается в payload — при инвалидации токен отклоняется
+const generateToken = (userId, tokenVersion = 0) => {
+    return jwt.sign({ userId, tokenVersion }, config.jwtSecret, {
         expiresIn: config.jwtExpiresIn
     });
 };
@@ -112,5 +131,6 @@ module.exports = {
     requireAdmin,
     generateToken,
     invalidateUserCache,
-    invalidateAllUserCache
+    invalidateAllUserCache,
+    invalidateUserSessions
 };

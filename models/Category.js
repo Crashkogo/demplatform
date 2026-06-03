@@ -131,6 +131,9 @@ Category.init({
                     category.level = 0;
                 }
             } else if (category.changed('parentId')) {
+                // Сохраняем старый путь для обновления потомков в afterSave
+                category._oldPath = category.previous('path') || category.path;
+
                 // Для существующих категорий при изменении родителя
                 if (category.parentId) {
                     const parent = await Category.findByPk(category.parentId);
@@ -148,7 +151,7 @@ Category.init({
             }
         },
         afterSave: async (category) => {
-            // Устанавливаем путь после получения id
+            // Устанавливаем путь после получения id (новая запись)
             if (category.isNewRecord || !category.path) {
                 let newPath;
                 if (category.parentId) {
@@ -170,6 +173,30 @@ Category.init({
 
                 // Обновляем текущий объект
                 category.path = newPath;
+            }
+
+            // При перемещении категории — обновляем пути всех потомков
+            if (category._oldPath && category._oldPath !== category.path) {
+                const oldPath = category._oldPath;
+                const newPath = category.path;
+                category._oldPath = null;
+
+                const { Op } = require('sequelize');
+
+                // Находим всех потомков по старому пути
+                const descendants = await Category.findAll({
+                    where: { path: { [Op.like]: `${oldPath}/%` } },
+                    attributes: ['id', 'path', 'level']
+                });
+
+                for (const child of descendants) {
+                    const updatedPath = child.path.replace(oldPath, newPath);
+                    const newLevel = updatedPath.split('/').filter(Boolean).length;
+                    await Category.update(
+                        { path: updatedPath, level: newLevel },
+                        { where: { id: child.id }, hooks: false, individualHooks: false }
+                    );
+                }
             }
         }
     }

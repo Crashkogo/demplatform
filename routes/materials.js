@@ -119,14 +119,15 @@ router.get('/', [authenticateToken, addAccessibleCategories], async (req, res) =
             categoryId,
             fileType,
             page = 1,
-            limit = 20
         } = req.query;
+
+        const limit = Math.min(parseInt(req.query.limit) || 20, 200);
 
         const options = {
             categoryId: categoryId ? parseInt(categoryId) : undefined,
             fileType,
-            limit: parseInt(limit),
-            offset: (parseInt(page) - 1) * parseInt(limit)
+            limit,
+            offset: (parseInt(page) - 1) * limit
         };
 
         // Если пользователь не имеет доступа ко всем категориям, фильтруем по доступным
@@ -417,11 +418,13 @@ router.get('/:id/download', [authenticateToken, addAccessibleCategories], async 
             logger.error('Error incrementing download count:', err)
         );
 
-        // Логируем событие скачивания
+        // Логируем событие скачивания с IP клиента
+        const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
         const categoryPath = await getCategoryPath(material.categoryId);
         logEvent(req.user.id, 'DOWNLOAD_MATERIAL', {
             'Путь к категории': categoryPath,
-            'Название материала': material.title
+            'Название материала': material.title,
+            'IP клиента': clientIp
         });
 
         // Получаем статистику файла
