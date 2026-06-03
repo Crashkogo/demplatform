@@ -1085,31 +1085,34 @@ function resetCategoryForm() {
 function updateCategorySelects() {
     const selects = ['categoryParent', 'materialCategory', 'materialCategoryFilter', 'materialEditCategory'];
 
+    // Для форм загрузки/редактирования материала показываем только категории,
+    // где у пользователя есть право на создание материалов
+    const uploadSelects = new Set(['materialCategory', 'materialEditCategory']);
+
     selects.forEach(selectId => {
         const select = document.getElementById(selectId);
         if (!select) return;
 
-        // Сохраняем текущее значение
         const currentValue = select.value;
 
-        // Очищаем опции (кроме первой)
         while (select.children.length > 1) {
             select.removeChild(select.lastChild);
         }
 
-        // Добавляем категории с полным путем
         allCategories.forEach(category => {
+            // Для upload-форм — только категории с правом создания
+            if (uploadSelects.has(selectId)) {
+                const isAdmin = PermissionsManager.isAdmin();
+                const canCreate = isAdmin || PermissionsManager.canDoInCategory('canCreateMaterials', category.id);
+                if (!canCreate) return;
+            }
+
             const option = document.createElement('option');
             option.value = category.id;
-
-            // Используем функцию для получения пути
-            const categoryPath = getCategoryPath(category, allCategories);
-            option.textContent = categoryPath;
-
+            option.textContent = getCategoryPath(category, allCategories);
             select.appendChild(option);
         });
 
-        // Восстанавливаем значение
         select.value = currentValue;
     });
 }
