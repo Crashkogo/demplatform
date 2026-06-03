@@ -22,11 +22,21 @@ const roleValidation = [
 ];
 
 // GET /api/roles - Получение списка всех ролей
+// Доступно: управление ролями, просмотр/создание/редактирование пользователей (нужен список ролей для формы)
 router.get('/', authenticateToken, async (req, res) => {
     try {
-        const roles = await Role.findAll({
-            order: [['name', 'ASC']]
-        });
+        const { userIsAdmin, userHasPermission } = require('../middleware/authorization');
+        const allowed = userIsAdmin(req) ||
+            userHasPermission(req, 'canManageRoles') ||
+            userHasPermission(req, 'canViewUsers') ||
+            userHasPermission(req, 'canCreateUsers') ||
+            userHasPermission(req, 'canEditUsers');
+
+        if (!allowed) {
+            return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+        }
+
+        const roles = await Role.findAll({ order: [['name', 'ASC']] });
         res.json({ success: true, data: roles });
     } catch (error) {
         logger.error('Get roles error:', error);

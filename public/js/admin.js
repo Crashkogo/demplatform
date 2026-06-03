@@ -1154,25 +1154,24 @@ function renderMaterials(materials) {
 
         // Получаем ID категории материала
         const materialCategoryId = material.categoryId?.id || material.categoryId;
-        const hasAccess = PermissionsManager.hasCategoryAccess(materialCategoryId);
 
-        // Формируем кнопки управления с учетом прав и доступа
+        // Используем canDoInCategory — право и доступ к категории должны быть у одной роли
         let actionsHTML = '';
-        if (PermissionsManager.has('canViewMaterials')) {
+        if (PermissionsManager.canDoInCategory('canViewMaterials', materialCategoryId)) {
             actionsHTML += `
                 <button class="btn btn-sm btn-outline-primary me-1" data-action="view-material" data-id="${material.id}">
                     <i class="bi bi-eye"></i>
                 </button>
             `;
         }
-        if (hasAccess && PermissionsManager.has('canEditMaterials')) {
+        if (PermissionsManager.canDoInCategory('canEditMaterials', materialCategoryId)) {
             actionsHTML += `
                 <button class="btn btn-sm btn-outline-secondary me-1" data-action="edit-material" data-id="${material.id}">
                     <i class="bi bi-pencil"></i>
                 </button>
             `;
         }
-        if (hasAccess && PermissionsManager.has('canDeleteMaterials')) {
+        if (PermissionsManager.canDoInCategory('canDeleteMaterials', materialCategoryId)) {
             actionsHTML += `
                 <button class="btn btn-sm btn-outline-danger" data-action="delete-material" data-id="${material.id}">
                     <i class="bi bi-trash"></i>
@@ -1744,8 +1743,11 @@ function updateMaterialCategorySelect() {
         select.removeChild(select.lastChild);
     }
 
-    // Добавляем категории
+    // Добавляем только категории, где есть право редактировать материалы
     allCategories.forEach(category => {
+        const canEdit = PermissionsManager.isAdmin() ||
+            PermissionsManager.canDoInCategory('canEditMaterials', category.id);
+        if (!canEdit) return;
         const option = document.createElement('option');
         option.value = category.id;
         option.textContent = getCategoryPath(category, allCategories);

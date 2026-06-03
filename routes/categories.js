@@ -231,7 +231,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // GET /api/categories/:id/materials - Получение материалов категории
-router.get('/:id/materials', authenticateToken, async (req, res) => {
+router.get('/:id/materials', [authenticateToken, addAccessibleCategories], async (req, res) => {
     try {
         const { id } = req.params;
         const { search, page = 1, limit = 20 } = req.query;
@@ -244,11 +244,16 @@ router.get('/:id/materials', authenticateToken, async (req, res) => {
             });
         }
 
+        // Проверяем доступ к запрошенной категории
+        if (req.accessibleCategories !== 'all' && !req.accessibleCategories.includes(parseInt(id))) {
+            return res.status(403).json({ success: false, message: 'Доступ к категории запрещен' });
+        }
+
         const options = {
             categoryId: id,
-            userRole: req.user.role,
             limit: parseInt(limit),
-            skip: (parseInt(page) - 1) * parseInt(limit)
+            skip: (parseInt(page) - 1) * parseInt(limit),
+            accessibleCategoryIds: req.accessibleCategories === 'all' ? null : req.accessibleCategories
         };
 
         const result = await Material.search(search, options);

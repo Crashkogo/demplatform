@@ -585,7 +585,7 @@ router.post('/', [uploadLimiter, authenticateToken, checkAccess('canCreateMateri
 });
 
 // PUT /api/materials/:id - Обновление материала
-router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canEditMaterials')], async (req, res) => {
+router.put('/:id', [writeLimiter, authenticateToken], async (req, res) => {
     try {
         const { id } = req.params;
         const { title, description, categoryId } = req.body;
@@ -605,6 +605,23 @@ router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canEditMateria
                 success: false,
                 message: 'Материал не найден'
             });
+        }
+
+        // Проверяем право редактировать в ТЕКУЩЕЙ категории материала
+        const { canUserActOnCategory, userIsAdmin } = require('../middleware/authorization');
+        const roles = req.user.roles || [];
+        if (!userIsAdmin(req)) {
+            const canEditCurrent = await canUserActOnCategory(roles, 'canEditMaterials', material.categoryId);
+            if (!canEditCurrent) {
+                return res.status(403).json({ success: false, message: 'Доступ к редактированию материала запрещен' });
+            }
+            // Если категория меняется — проверить доступ к новой
+            if (parseInt(categoryId) !== material.categoryId) {
+                const canEditNew = await canUserActOnCategory(roles, 'canEditMaterials', parseInt(categoryId));
+                if (!canEditNew) {
+                    return res.status(403).json({ success: false, message: 'Доступ к категории-назначению запрещен' });
+                }
+            }
         }
 
         // Проверяем, что категория существует
@@ -662,7 +679,7 @@ router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canEditMateria
 });
 
 // DELETE /api/materials/:id - Удаление материала
-router.delete('/:id', [writeLimiter, authenticateToken, checkAccess('canDeleteMaterials')], async (req, res) => {
+router.delete('/:id', [writeLimiter, authenticateToken], async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -672,6 +689,16 @@ router.delete('/:id', [writeLimiter, authenticateToken, checkAccess('canDeleteMa
                 success: false,
                 message: 'Материал не найден'
             });
+        }
+
+        // Проверяем право на удаление именно в категории этого материала
+        const { canUserActOnCategory, userIsAdmin } = require('../middleware/authorization');
+        const roles = req.user.roles || [];
+        if (!userIsAdmin(req)) {
+            const allowed = await canUserActOnCategory(roles, 'canDeleteMaterials', material.categoryId);
+            if (!allowed) {
+                return res.status(403).json({ success: false, message: 'Доступ к удалению материала запрещен' });
+            }
         }
 
         // Логируем событие перед удалением
