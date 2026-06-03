@@ -218,16 +218,14 @@ router.get('/:id/view', [authenticateToken, addAccessibleCategories], async (req
             });
         }
 
-        // Проверяем наличие права на просмотр материалов
-        const user = req.user;
-        const roles = user.roles || [];
+        // Проверяем право на просмотр: та же роль должна давать и canViewMaterials, и доступ к категории
+        const { canUserActOnCategory } = require('../middleware/authorization');
+        const roles = req.user.roles || [];
         const isAdmin = roles.some(r => r.isAdmin || r.canManageAllCategories);
-        const canView = roles.some(r => r.canViewMaterials);
 
         if (!isAdmin) {
-            if (!canView) {
-                return res.status(403).json({ success: false, message: 'Доступ запрещен: нет права на просмотр материалов' });
-            } else if (req.accessibleCategories !== 'all' && !req.accessibleCategories.includes(material.categoryId)) {
+            const allowed = await canUserActOnCategory(roles, 'canViewMaterials', material.categoryId);
+            if (!allowed) {
                 return res.status(403).json({ success: false, message: 'Доступ к просмотру материала запрещен' });
             }
         }
@@ -302,16 +300,14 @@ router.get('/:id/preview-pdf', [authenticateToken, addAccessibleCategories], asy
             });
         }
 
-        // Проверяем права доступа
-        const user = req.user;
-        const roles = user.roles || [];
-        const isAdmin = roles.some(r => r.isAdmin || r.canManageAllCategories);
-        const canView = roles.some(r => r.canViewMaterials);
+        // Проверяем права доступа: та же роль должна давать и canViewMaterials, и доступ к категории
+        const { canUserActOnCategory: canActView2 } = require('../middleware/authorization');
+        const roles2 = req.user.roles || [];
+        const isAdmin2 = roles2.some(r => r.isAdmin || r.canManageAllCategories);
 
-        if (!isAdmin) {
-            if (!canView) {
-                return res.status(403).json({ success: false, message: 'Доступ запрещен: нет права на просмотр материалов' });
-            } else if (req.accessibleCategories !== 'all' && !req.accessibleCategories.includes(material.categoryId)) {
+        if (!isAdmin2) {
+            const allowed = await canActView2(roles2, 'canViewMaterials', material.categoryId);
+            if (!allowed) {
                 return res.status(403).json({ success: false, message: 'Доступ к просмотру материала запрещен' });
             }
         }
@@ -390,16 +386,14 @@ router.get('/:id/download', [authenticateToken, addAccessibleCategories], async 
             });
         }
 
-        // Проверяем наличие права на скачивание материалов
-        const user = req.user;
-        const roles = user.roles || [];
-        const isAdmin = roles.some(r => r.isAdmin || r.canManageAllCategories);
-        const canDownload = roles.some(r => r.canDownloadMaterials);
+        // Проверяем право на скачивание: та же роль должна давать и canDownloadMaterials, и доступ к категории
+        const { canUserActOnCategory: canActDownload } = require('../middleware/authorization');
+        const dlRoles = req.user.roles || [];
+        const dlIsAdmin = dlRoles.some(r => r.isAdmin || r.canManageAllCategories);
 
-        if (!isAdmin) {
-            if (!canDownload) {
-                return res.status(403).json({ success: false, message: 'Доступ запрещен: нет права на скачивание материалов' });
-            } else if (req.accessibleCategories !== 'all' && !req.accessibleCategories.includes(material.categoryId)) {
+        if (!dlIsAdmin) {
+            const allowed = await canActDownload(dlRoles, 'canDownloadMaterials', material.categoryId);
+            if (!allowed) {
                 return res.status(403).json({ success: false, message: 'Доступ к скачиванию материала запрещен' });
             }
         }
