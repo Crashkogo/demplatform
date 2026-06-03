@@ -548,8 +548,11 @@ function createMaterialCard(material) {
     const fileSize = formatFileSize(material.fileSize);
     const createdDate = new Date(material.createdAt).toLocaleDateString('ru-RU');
 
+    const catId = material.categoryId;
+    const canView = PermissionsManager.canDoInCategory('canViewMaterials', catId);
+    const canDownload = PermissionsManager.canDoInCategory('canDownloadMaterials', catId);
+
     if (isMobile()) {
-        // Компактная карточка для мобильных устройств
         const card = document.createElement('div');
         card.className = 'compact-material-card';
 
@@ -562,20 +565,20 @@ function createMaterialCard(material) {
                 <p class="compact-material-meta">${createdDate} • ${fileSize}</p>
             </div>
             <div class="compact-material-actions">
-                <button class="btn btn-outline-primary compact-btn" data-action="view-material" data-id="${material.id}" title="Просмотр">
-                    <i class="bi bi-eye"></i>
-                </button>
-                <button class="btn btn-outline-success compact-btn" data-action="download-material" data-id="${material.id}" title="Скачать">
-                    <i class="bi bi-download"></i>
-                </button>
+                ${canView ? `<button class="btn btn-outline-primary compact-btn" data-action="view-material" data-id="${material.id}" title="Просмотр"><i class="bi bi-eye"></i></button>` : ''}
+                ${canDownload ? `<button class="btn btn-outline-success compact-btn" data-action="download-material" data-id="${material.id}" title="Скачать"><i class="bi bi-download"></i></button>` : ''}
             </div>
         `;
 
         return card;
     } else {
-        // Обычная карточка для десктопа
         const col = document.createElement('div');
         col.className = 'col-lg-4 col-md-6';
+
+        const footerButtons = [
+            canView ? `<button class="btn btn-outline-primary btn-sm flex-grow-1" data-action="view-material" data-id="${material.id}"><i class="bi bi-eye me-1"></i>Просмотр</button>` : '',
+            canDownload ? `<button class="btn btn-outline-success btn-sm" data-action="download-material" data-id="${material.id}"><i class="bi bi-download"></i></button>` : ''
+        ].filter(Boolean).join('');
 
         col.innerHTML = `
             <div class="card material-card h-100">
@@ -589,9 +592,7 @@ function createMaterialCard(material) {
                             <small class="text-muted">${material.category?.name || 'Без категории'}</small>
                         </div>
                     </div>
-                    
                     ${material.description ? `<p class="card-text text-muted small">${material.description.substring(0, 100)}${material.description.length > 100 ? '...' : ''}</p>` : ''}
-                    
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="small text-muted">
                             <i class="bi bi-calendar3 me-1"></i>${createdDate}<br>
@@ -603,16 +604,7 @@ function createMaterialCard(material) {
                         </div>
                     </div>
                 </div>
-                <div class="card-footer bg-transparent">
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-outline-primary btn-sm flex-grow-1" data-action="view-material" data-id="${material.id}">
-                            <i class="bi bi-eye me-1"></i>Просмотр
-                        </button>
-                        <button class="btn btn-outline-success btn-sm" data-action="download-material" data-id="${material.id}">
-                            <i class="bi bi-download"></i>
-                        </button>
-                    </div>
-                </div>
+                ${footerButtons ? `<div class="card-footer bg-transparent"><div class="d-flex gap-2">${footerButtons}</div></div>` : ''}
             </div>
         `;
 

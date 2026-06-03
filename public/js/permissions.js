@@ -6,6 +6,8 @@ const PermissionsManager = {
     userPermissions: {},
     userInfo: null,
     isInitialized: false,
+    // Права по категориям: { canViewMaterials: [1,2,3] | 'all', ... }
+    categoryPermissions: {},
 
     /**
      * @private
@@ -68,6 +70,9 @@ const PermissionsManager = {
             const response = await axios.get('/api/auth/me');
             if (response.data.success && response.data.user) {
                 this._processUserData(response.data.user);
+                if (response.data.categoryPermissions) {
+                    this.categoryPermissions = response.data.categoryPermissions;
+                }
                 console.log('PermissionsManager: Initialized from /api/auth/me.');
                 return true;
             }
@@ -84,9 +89,26 @@ const PermissionsManager = {
      * Manually sets permissions from a user object, used by the login page.
      * @param {object} user - The user object received from the login API.
      */
-    setPermissions(user) {
+    setPermissions(user, catPerms) {
         this._processUserData(user);
+        if (catPerms) this.categoryPermissions = catPerms;
         console.log('PermissionsManager: Permissions set manually from login page.');
+    },
+
+    /**
+     * Проверяет, есть ли у пользователя право на конкретное действие в конкретной категории.
+     * Учитывает что право и доступ к категории должны быть у одной роли.
+     * @param {string} permission - Ключ права (e.g. 'canDownloadMaterials')
+     * @param {number|string} categoryId - ID категории материала
+     * @returns {boolean}
+     */
+    canDoInCategory(permission, categoryId) {
+        if (!this.isInitialized) return false;
+        if (this.userPermissions.isAdmin) return true;
+        const catPerm = this.categoryPermissions[permission];
+        if (!catPerm) return false;
+        if (catPerm === 'all') return true;
+        return catPerm.includes(Number(categoryId));
     },
 
     /**
@@ -164,6 +186,7 @@ const PermissionsManager = {
         this.userPermissions = {};
         this.userInfo = null;
         this.isInitialized = false;
+        this.categoryPermissions = {};
     },
 
     /**

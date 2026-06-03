@@ -25,6 +25,33 @@ const loginLimiter = rateLimit({
     message: { success: false, message: 'Слишком много попыток входа. Попробуйте через 15 минут.' }
 });
 
+const MATERIAL_PERMISSIONS = [
+    'canViewMaterials', 'canDownloadMaterials', 'canCreateMaterials',
+    'canEditMaterials', 'canDeleteMaterials'
+];
+
+/**
+ * Для каждого права на материалы вычисляет список ID категорий,
+ * где это право реально работает (та же роль даёт и право, и доступ).
+ */
+async function computeCategoryPermissions(roles) {
+    const result = {};
+    for (const perm of MATERIAL_PERMISSIONS) {
+        const relevant = roles.filter(r => r.isAdmin || r.canManageAllCategories || r[perm]);
+        if (relevant.some(r => r.isAdmin || r.canManageAllCategories)) {
+            result[perm] = 'all';
+        } else {
+            const ids = new Set();
+            for (const r of relevant) {
+                const cats = await r.getAccessibleCategories();
+                cats.forEach(c => ids.add(c.id));
+            }
+            result[perm] = Array.from(ids);
+        }
+    }
+    return result;
+}
+
 /**
  * Формирует ответ клиенту: объединяет права из всех ролей пользователя.
  * Фронтенд ждёт поле Role с объединёнными правами.
@@ -107,6 +134,8 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
         const accessibleCategories = await user.getAccessibleCategories();
         const accessibleCategoryIds = accessibleCategories.map(cat => cat.id);
 
+        const categoryPermissions = await computeCategoryPermissions(roles);
+
         const userObject = user.toSafeObject();
         const userWithRole = buildUserWithRoles(userObject, roles);
 
@@ -119,7 +148,8 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
             message: 'Успешная авторизация',
             user: userWithRole,
             permissions,
-            accessibleCategoryIds
+            accessibleCategoryIds,
+            categoryPermissions
         });
 
     } catch (error) {
@@ -134,10 +164,11 @@ router.get('/me', authenticateToken, async (req, res) => {
         const roles = req.user.roles || [];
         const userObject = req.user.toSafeObject();
         const userWithRole = buildUserWithRoles(userObject, roles);
+        const categoryPermissions = await computeCategoryPermissions(roles);
 
         logger.debug('/api/auth/me:', { login: userWithRole.login, roles: roles.map(r => r.name) });
 
-        res.json({ success: true, user: userWithRole });
+        res.json({ success: true, user: userWithRole, categoryPermissions });
     } catch (error) {
         logger.error('Get user info error:', error);
         res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });

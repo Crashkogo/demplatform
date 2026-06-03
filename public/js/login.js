@@ -73,7 +73,7 @@ loginForm.addEventListener('submit', async function (e) {
             localStorage.setItem('user', JSON.stringify(response.data.user));
 
             // Устанавливаем права в менеджере, передавая весь объект пользователя
-            PermissionsManager.setPermissions(response.data.user);
+            PermissionsManager.setPermissions(response.data.user, response.data.categoryPermissions);
 
             showAlert('Успешная авторизация! Перенаправление...', 'success');
 
