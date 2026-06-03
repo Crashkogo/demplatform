@@ -259,7 +259,9 @@ function initializeModalHandlers() {
     // Пользователи
     document.getElementById('saveUserBtn').addEventListener('click', saveUser);
     document.getElementById('userModal').addEventListener('show.bs.modal', async function () {
-        await populateUserRoleSelect();
+        // При редактировании editUser уже расставил галочки — не сбрасываем
+        const isEdit = !!document.getElementById('userId').value;
+        if (!isEdit) await populateUserRoleCheckboxes([]);
     });
     document.getElementById('userModal').addEventListener('hidden.bs.modal', function () {
         resetUserForm();
