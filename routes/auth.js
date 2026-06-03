@@ -8,135 +8,111 @@ const logger = require('../utils/logger');
 
 const isProd = process.env.NODE_ENV === 'production';
 
-// Настройки cookie с JWT
 const cookieOptions = {
-    httpOnly: true,           // JavaScript не имеет доступа к cookie
-    secure: isProd,           // Только HTTPS в production
-    sameSite: 'strict',       // Блокирует CSRF с других доменов
-    maxAge: 7 * 24 * 60 * 60 * 1000  // 7 дней (совпадает с JWT expiry)
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000
 };
 
 const router = express.Router();
 
-// Ограничение: не более 10 попыток входа за 15 минут с одного IP
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
     standardHeaders: true,
     legacyHeaders: false,
-    message: {
-        success: false,
-        message: 'Слишком много попыток входа. Попробуйте через 15 минут.'
-    }
+    message: { success: false, message: 'Слишком много попыток входа. Попробуйте через 15 минут.' }
 });
 
-// Хелпер: формирует объект пользователя с ролью для ответа клиенту
-function buildUserWithRole(userObject, roleData) {
+/**
+ * Формирует ответ клиенту: объединяет права из всех ролей пользователя.
+ * Фронтенд ждёт поле Role с объединёнными правами.
+ */
+function buildUserWithRoles(userObject, roles) {
+    // Объединяем все права по OR
+    const merged = roles.reduce((acc, r) => {
+        const perms = r.getPermissions ? r.getPermissions() : {};
+        Object.keys(perms).forEach(k => {
+            if (typeof perms[k] === 'boolean') acc[k] = acc[k] || perms[k];
+        });
+        if (r.isAdmin) acc.isAdmin = true;
+        if (r.categoryAccessType === 'all') acc.categoryAccessType = 'all';
+        return acc;
+    }, { categoryAccessType: 'selected' });
+
     return {
         ...userObject,
         Role: {
-            id: roleData.id,
-            name: roleData.name,
-            description: roleData.description,
-            ...roleData.getPermissions(),
-            allowedCategories: roleData.allowedCategories || []
+            id: roles[0]?.id,
+            name: roles.map(r => r.name).join(', '),
+            description: roles[0]?.description,
+            ...merged,
+            allowedCategories: roles.flatMap(r => r.allowedCategories || [])
         }
     };
 }
 
-// Валидаторы
 const loginValidation = [
-    body('login')
-        .isLength({ min: 3, max: 50 })
-        .withMessage('Логин должен содержать от 3 до 50 символов')
-        .trim(),
-    body('password')
-        .isLength({ min: 6 })
-        .withMessage('Пароль должен содержать минимум 6 символов')
+    body('login').isLength({ min: 3, max: 50 }).withMessage('Логин должен содержать от 3 до 50 символов').trim(),
+    body('password').isLength({ min: 6 }).withMessage('Пароль должен содержать минимум 6 символов')
 ];
 
-// POST /api/auth/login - Вход в систему
+// POST /api/auth/login
 router.post('/login', loginLimiter, loginValidation, async (req, res) => {
     try {
-        // Проверка валидации
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({
-                success: false,
-                message: 'Ошибки валидации',
-                errors: errors.array()
-            });
+            return res.status(400).json({ success: false, message: 'Ошибки валидации', errors: errors.array() });
         }
 
         const { login, password } = req.body;
 
-        // Поиск пользователя с ролью
         logger.debug('Ищем пользователя:', login);
         const user = await User.findOne({
             where: { login },
-            include: [{ model: Role, as: 'roleData' }]
+            include: [{
+                model: Role,
+                as: 'roles',
+                through: { attributes: [] },
+                include: [{ association: 'allowedCategories', through: { attributes: [] } }]
+            }]
         });
 
-        logger.debug('Пользователь найден:', !!user);
-        if (user) {
-            logger.debug('roleData присутствует:', !!user.roleData);
-            logger.debug('roleId:', user.roleId);
-        }
-
         if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: 'Неверный логин или пароль'
-            });
+            return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
         }
 
-        // Проверка пароля
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {
-            return res.status(401).json({
-                success: false,
-                message: 'Неверный логин или пароль'
-            });
+            return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
         }
 
-        // Проверка наличия роли
-        if (!user.roleData) {
-            logger.error('Роль не загружена для пользователя:', user.login);
-            return res.status(403).json({
-                success: false,
-                message: 'Роль пользователя не найдена. Обратитесь к администратору.'
-            });
+        const roles = user.roles || [];
+        if (roles.length === 0) {
+            return res.status(403).json({ success: false, message: 'Роли не назначены. Обратитесь к администратору.' });
         }
 
-        logger.debug('Роль загружена:', user.roleData.name);
+        logger.debug('Роли загружены:', roles.map(r => r.name).join(', '));
 
-        // Обновление времени последнего входа
         user.lastLogin = new Date();
         await user.save();
 
-        // Генерация токена
         const token = generateToken(user.id);
 
-        // Получаем права пользователя
-        const permissions = user.roleData.getPermissions();
+        // Получаем объединённые права
+        const permissions = await user.getPermissions();
         logger.debug('Права получены:', Object.keys(permissions).length);
 
-        // Получаем доступные категории (только ID для оптимизации)
         const accessibleCategories = await user.getAccessibleCategories();
         const accessibleCategoryIds = accessibleCategories.map(cat => cat.id);
-        logger.debug('Категории получены:', accessibleCategoryIds.length);
 
         const userObject = user.toSafeObject();
-        const userWithRole = buildUserWithRole(userObject, user.roleData);
+        const userWithRole = buildUserWithRoles(userObject, roles);
 
-        // Устанавливаем JWT в httpOnly cookie — JavaScript не может его прочитать
         res.cookie('authToken', token, cookieOptions);
 
-        logger.debug('Отправляем ответ логина для пользователя:', {
-            login: userWithRole.login,
-            roleName: userWithRole.Role.name,
-            isAdmin: userWithRole.Role.isAdmin
-        });
+        logger.debug('Логин успешен:', { login: userWithRole.login, roles: roles.map(r => r.name) });
 
         res.json({
             success: true,
@@ -148,58 +124,35 @@ router.post('/login', loginLimiter, loginValidation, async (req, res) => {
 
     } catch (error) {
         logger.error('Login error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Внутренняя ошибка сервера'
-        });
+        res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
     }
 });
 
-// GET /api/auth/me - Получение информации о текущем пользователе
+// GET /api/auth/me
 router.get('/me', authenticateToken, async (req, res) => {
     try {
+        const roles = req.user.roles || [];
         const userObject = req.user.toSafeObject();
-        const userWithRole = buildUserWithRole(userObject, req.user.roleData);
+        const userWithRole = buildUserWithRoles(userObject, roles);
 
-        logger.debug('/api/auth/me - Отправляем пользователя:', {
-            login: userWithRole.login,
-            roleName: userWithRole.Role.name,
-            isAdmin: userWithRole.Role.isAdmin
-        });
+        logger.debug('/api/auth/me:', { login: userWithRole.login, roles: roles.map(r => r.name) });
 
-        res.json({
-            success: true,
-            user: userWithRole
-        });
+        res.json({ success: true, user: userWithRole });
     } catch (error) {
         logger.error('Get user info error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Внутренняя ошибка сервера'
-        });
+        res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
     }
 });
 
-// POST /api/auth/logout - Выход из системы
+// POST /api/auth/logout
 router.post('/logout', authenticateToken, (req, res) => {
-    res.clearCookie('authToken', {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: 'strict'
-    });
-    res.json({
-        success: true,
-        message: 'Успешный выход из системы'
-    });
+    res.clearCookie('authToken', { httpOnly: true, secure: isProd, sameSite: 'strict' });
+    res.json({ success: true, message: 'Успешный выход из системы' });
 });
 
-// POST /api/auth/verify - Проверка действительности токена
+// POST /api/auth/verify
 router.post('/verify', authenticateToken, (req, res) => {
-    res.json({
-        success: true,
-        message: 'Токен действителен',
-        user: req.user.toSafeObject()
-    });
+    res.json({ success: true, message: 'Токен действителен', user: req.user.toSafeObject() });
 });
 
-module.exports = router; 
+module.exports = router;

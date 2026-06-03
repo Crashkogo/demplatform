@@ -48,25 +48,22 @@ const headerUpload = multer({
 
 // Middleware: право на чтение статей
 const canRead = (req, res, next) => {
-    const role = req.user.roleData;
-    if (!role) return res.status(403).json({ success: false, message: 'Нет доступа' });
-    if (role.isAdmin || role.canReadArticles || role.canCreateArticles) return next();
+    const roles = req.user.roles || [];
+    if (roles.some(r => r.isAdmin || r.canReadArticles || r.canCreateArticles)) return next();
     return res.status(403).json({ success: false, message: 'Нет доступа к статьям' });
 };
 
 // Middleware: право на создание/редактирование статей
 const canCreate = (req, res, next) => {
-    const role = req.user.roleData;
-    if (!role) return res.status(403).json({ success: false, message: 'Нет доступа' });
-    if (role.isAdmin || role.canCreateArticles) return next();
+    const roles = req.user.roles || [];
+    if (roles.some(r => r.isAdmin || r.canCreateArticles)) return next();
     return res.status(403).json({ success: false, message: 'Нет права создавать статьи' });
 };
 
 // Middleware: право на удаление статей
 const canDelete = (req, res, next) => {
-    const role = req.user.roleData;
-    if (!role) return res.status(403).json({ success: false, message: 'Нет доступа' });
-    if (role.isAdmin || role.canCreateArticles) return next();
+    const roles = req.user.roles || [];
+    if (roles.some(r => r.isAdmin || r.canCreateArticles)) return next();
     return res.status(403).json({ success: false, message: 'Нет права удалять статьи' });
 };
 

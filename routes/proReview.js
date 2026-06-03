@@ -21,9 +21,8 @@ const logger = require('../utils/logger');
 const mm = (val) => Math.round(val * 56.69);
 
 const canGenerate = (req, res, next) => {
-    const role = req.user.roleData;
-    if (!role) return res.status(403).json({ success: false, message: 'Нет доступа' });
-    if (role.isAdmin || role.canGenerateProReview) return next();
+    const roles = req.user.roles || [];
+    if (roles.some(r => r.isAdmin || r.canGenerateProReview)) return next();
     return res.status(403).json({ success: false, message: 'Нет права формирования про-обзора' });
 };
 
