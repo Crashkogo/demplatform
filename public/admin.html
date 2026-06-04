@@ -389,6 +389,12 @@
                                 История
                             </a>
                         </li>
+                        <li class="nav-item" id="sidebarOrganizations">
+                            <a class="nav-link" href="#" data-section="organizations">
+                                <i class="bi bi-building me-2"></i>
+                                Организации
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -931,6 +937,33 @@
                         </nav>
                     </div>
 
+                    <!-- Секция организаций -->
+                    <div id="section-organizations" class="content-section">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h3><i class="bi bi-building me-2"></i>Организации</h3>
+                            <button class="btn btn-primary" id="addOrganizationBtn">
+                                <i class="bi bi-plus-circle me-2"></i>Добавить организацию
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Название</th>
+                                        <th>Описание</th>
+                                        <th>Пользователей</th>
+                                        <th>Ролей</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="organizationsTableBody">
+                                    <tr><td colspan="5" class="text-center text-muted">Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -952,14 +985,20 @@
                             <input type="text" class="form-control" id="userLogin" required>
                         </div>
                         <div class="mb-3">
-                            <label for="userPassword" class="form-label">Пароль</label>
-                            <input type="password" class="form-control" id="userPassword" required>
+                            <label for="userPassword" class="form-label">Пароль <small class="text-muted" id="passwordHint">(обязательно при создании)</small></label>
+                            <input type="password" class="form-control" id="userPassword">
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Роли <small class="text-muted">(выберите одну или несколько)</small></label>
                             <div id="userRolesContainer" class="border rounded p-2" style="max-height:200px;overflow-y:auto;">
                                 <span class="text-muted small">Загрузка...</span>
                             </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="userOrganization" class="form-label">Организация <small class="text-muted">(необязательно)</small></label>
+                            <select class="form-select" id="userOrganization">
+                                <option value="">— Без организации —</option>
+                            </select>
                         </div>
                     </form>
                 </div>
@@ -990,6 +1029,12 @@
                             <div class="col-md-6 mb-3">
                                 <label for="roleDescription" class="form-label">Описание</label>
                                 <input type="text" class="form-control" id="roleDescription">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="roleOrganization" class="form-label">Организация <small class="text-muted">(необязательно)</small></label>
+                                <select class="form-select" id="roleOrganization">
+                                    <option value="">— Без организации —</option>
+                                </select>
                             </div>
                         </div>
 
@@ -1146,6 +1191,35 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
                     <button type="button" class="btn btn-primary" id="saveRoleBtn">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно организации -->
+    <div class="modal fade" id="organizationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="organizationModalTitle">Добавить организацию</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="organizationForm">
+                        <input type="hidden" id="organizationId">
+                        <div class="mb-3">
+                            <label for="organizationName" class="form-label">Название <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="organizationName" required maxlength="100">
+                        </div>
+                        <div class="mb-3">
+                            <label for="organizationDescription" class="form-label">Описание</label>
+                            <textarea class="form-control" id="organizationDescription" rows="3" maxlength="1000"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" id="saveOrganizationBtn">Сохранить</button>
                 </div>
             </div>
         </div>
