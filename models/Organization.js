@@ -25,7 +25,13 @@ Organization.init({
     modelName: 'Organization',
     tableName: 'organizations',
     timestamps: true,
-    underscored: true
+    underscored: true,
+    indexes: [
+        {
+            unique: true,
+            fields: ['name']
+        }
+    ]
 });
 
 module.exports = Organization;
