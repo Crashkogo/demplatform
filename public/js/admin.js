@@ -791,7 +791,6 @@ async function saveUser() {
         if (userId) {
             response = await axios.put(`/api/admin/users/${userId}`, userData);
         } else {
-            userData.password = password;
             response = await axios.post('/api/admin/users', userData);
         }
 
