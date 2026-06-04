@@ -155,6 +155,8 @@ const PermissionsManager = {
                 return this.has('canReadArticles') || this.has('canCreateArticles');
             case 'pro-review':
                 return this.has('canGenerateProReview');
+            case 'organizations':
+                return this.userPermissions.isAdmin === true;
             default:
                 return false;
         }

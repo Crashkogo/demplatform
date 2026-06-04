@@ -11,6 +11,7 @@ let allCategories = [];
 let allUsers = [];
 let allMaterials = [];
 let allRoles = []; // Добавлено
+let allOrganizations = [];
 
 // Настройка Axios — токен хранится в httpOnly cookie, браузер шлёт её автоматически
 axios.defaults.baseURL = window.location.origin;
@@ -102,6 +103,11 @@ async function initializeApp() {
 
         // 5. Инициализируем остальные компоненты
         initializeEventListeners();
+
+        // Загружаем организации для дропдаунов (нужны всем у кого есть права управления пользователями)
+        if (PermissionsManager.isAdmin() || PermissionsManager.has('canCreateUsers') || PermissionsManager.has('canEditUsers') || PermissionsManager.has('canManageRoles')) {
+            await loadOrganizations();
+        }
 
         console.log('Админ-панель инициализирована корректно');
 
@@ -235,6 +241,21 @@ function initializeEventListeners() {
     document.getElementById('applyHistoryFilters').addEventListener('click', () => loadHistoryLogs(1));
     document.getElementById('resetHistoryFilters').addEventListener('click', resetHistoryFiltersAndLoad);
 
+    // Организации
+    const addOrgBtn = document.getElementById('addOrganizationBtn');
+    if (addOrgBtn) {
+        addOrgBtn.addEventListener('click', () => {
+            document.getElementById('organizationId').value = '';
+            document.getElementById('organizationName').value = '';
+            document.getElementById('organizationDescription').value = '';
+            document.getElementById('organizationModalTitle').textContent = 'Добавить организацию';
+            new bootstrap.Modal(document.getElementById('organizationModal')).show();
+        });
+    }
+
+    const saveOrgBtn = document.getElementById('saveOrganizationBtn');
+    if (saveOrgBtn) saveOrgBtn.addEventListener('click', saveOrganization);
+
     // Делегирование событий для динамических кнопок в таблицах
     document.addEventListener('click', function (e) {
         const btn = e.target.closest('[data-action]');
@@ -250,6 +271,19 @@ function initializeEventListeners() {
             case 'view-material': viewMaterial(id); break;
             case 'edit-material': editMaterial(id); break;
             case 'delete-material': deleteMaterial(id); break;
+            case 'edit-org': {
+                const org = allOrganizations.find(o => o.id === parseInt(id));
+                if (!org) return;
+                document.getElementById('organizationId').value = org.id;
+                document.getElementById('organizationName').value = org.name;
+                document.getElementById('organizationDescription').value = org.description || '';
+                document.getElementById('organizationModalTitle').textContent = 'Редактировать организацию';
+                new bootstrap.Modal(document.getElementById('organizationModal')).show();
+                break;
+            }
+            case 'delete-org':
+                deleteOrganization(parseInt(id));
+                break;
         }
     });
 }
@@ -374,6 +408,9 @@ async function showSection(sectionName) {
                 break;
             case 'articles-section':
                 await loadArticlesSection();
+                break;
+            case 'organizations':
+                await loadOrganizations();
                 break;
         }
     } catch (error) {
@@ -503,6 +540,10 @@ function renderUsers(users) {
               }).join('')
             : '<span class="badge bg-secondary">Не назначена</span>';
 
+        const orgBadge = user.organization
+            ? `<span class="badge bg-info text-dark ms-1">${escapeHtml(user.organization.name)}</span>`
+            : '';
+
         let actionsHTML = '';
         if (PermissionsManager.has('canEditUsers')) {
             actionsHTML += `
@@ -523,7 +564,7 @@ function renderUsers(users) {
         }
 
         row.innerHTML = `
-            <td>${user.login}</td>
+            <td>${user.login}${orgBadge}</td>
             <td>${rolesBadges}</td>
             <td>${createdDate}</td>
             <td>${lastLogin}</td>
@@ -556,6 +597,10 @@ async function editUser(userId) {
     document.getElementById('userLogin').value = user.login;
     document.getElementById('userPassword').value = '';
     document.getElementById('userPassword').required = false;
+
+    // Восстанавливаем организацию пользователя
+    const orgSelect = document.getElementById('userOrganization');
+    if (orgSelect) orgSelect.value = user.organizationId || '';
 
     // Отмечаем текущие роли пользователя
     const currentRoleIds = (user.roles || []).map(r => r.id);
@@ -591,6 +636,137 @@ async function deleteUser(userId) {
     }
 }
 
+// Загрузка организаций
+async function loadOrganizations() {
+    try {
+        const response = await axios.get('/api/organizations');
+        if (response.data.success) {
+            allOrganizations = response.data.data;
+            renderOrganizations(allOrganizations);
+            updateOrganizationDropdowns();
+            updateOrganizationFilters();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки организаций:', error);
+        showError('Ошибка загрузки организаций');
+    }
+}
+
+function renderOrganizations(orgs) {
+    const tbody = document.getElementById('organizationsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!orgs || orgs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Организации не добавлены</td></tr>';
+        return;
+    }
+
+    orgs.forEach(org => {
+        const row = document.createElement('tr');
+        const actionsHTML = PermissionsManager.isAdmin() ? `
+            <button class="btn btn-sm btn-outline-primary me-1" data-action="edit-org" data-id="${org.id}">
+                <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger" data-action="delete-org" data-id="${org.id}">
+                <i class="bi bi-trash"></i>
+            </button>
+        ` : '<span class="text-muted">—</span>';
+
+        row.innerHTML = `
+            <td>${escapeHtml(org.name)}</td>
+            <td>${escapeHtml(org.description || '—')}</td>
+            <td>—</td>
+            <td>—</td>
+            <td>${actionsHTML}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function updateOrganizationDropdowns() {
+    const selects = ['userOrganization', 'roleOrganization'];
+    selects.forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        const currentVal = select.value;
+        while (select.options.length > 1) select.remove(1);
+        allOrganizations.forEach(org => {
+            const opt = document.createElement('option');
+            opt.value = org.id;
+            opt.textContent = org.name;
+            select.appendChild(opt);
+        });
+        select.value = currentVal || '';
+    });
+}
+
+function updateOrganizationFilters() {
+    const filters = ['userOrgFilter', 'roleOrgFilter'];
+    filters.forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        const currentVal = select.value;
+        while (select.options.length > 1) select.remove(1);
+        allOrganizations.forEach(org => {
+            const opt = document.createElement('option');
+            opt.value = org.id;
+            opt.textContent = org.name;
+            select.appendChild(opt);
+        });
+        select.value = currentVal || '';
+    });
+}
+
+async function saveOrganization() {
+    const orgId = document.getElementById('organizationId').value;
+    const name = document.getElementById('organizationName').value.trim();
+    const description = document.getElementById('organizationDescription').value.trim();
+
+    if (!name) {
+        showError('Укажите название организации');
+        return;
+    }
+
+    try {
+        let response;
+        if (orgId) {
+            response = await axios.put(`/api/organizations/${orgId}`, { name, description });
+        } else {
+            response = await axios.post('/api/organizations', { name, description });
+        }
+
+        if (response.data.success) {
+            showSuccess(response.data.message);
+            bootstrap.Modal.getInstance(document.getElementById('organizationModal')).hide();
+            await loadOrganizations();
+        } else {
+            showError(response.data.message);
+        }
+    } catch (error) {
+        showError(error.response?.data?.message || 'Ошибка сохранения организации');
+    }
+}
+
+async function deleteOrganization(orgId) {
+    const org = allOrganizations.find(o => o.id === orgId);
+    if (!org) return;
+
+    if (!confirm(`Удалить организацию "${org.name}"?`)) return;
+
+    try {
+        const response = await axios.delete(`/api/organizations/${orgId}`);
+        if (response.data.success) {
+            showSuccess(response.data.message);
+            await loadOrganizations();
+        } else {
+            showError(response.data.message);
+        }
+    } catch (error) {
+        showError(error.response?.data?.message || 'Ошибка удаления организации');
+    }
+}
+
 // Сохранение пользователя
 async function saveUser() {
     try {
@@ -606,7 +782,9 @@ async function saveUser() {
             return;
         }
 
-        const userData = { login, roleIds };
+        const orgSelect = document.getElementById('userOrganization');
+        const organizationId = orgSelect?.value ? parseInt(orgSelect.value) : null;
+        const userData = { login, roleIds, organizationId };
         if (password) userData.password = password;
 
         let response;
@@ -704,6 +882,10 @@ function renderRoles(roles) {
     roles.forEach(role => {
         const row = document.createElement('tr');
 
+        const orgBadge = role.organization
+            ? `<span class="badge bg-info text-dark ms-1">${escapeHtml(role.organization.name)}</span>`
+            : '';
+
         // Формируем кнопки управления с учетом прав
         let actionsHTML = '';
         if (PermissionsManager.has('canManageRoles')) {
@@ -720,7 +902,7 @@ function renderRoles(roles) {
         }
 
         row.innerHTML = `
-            <td>${role.name}</td>
+            <td>${role.name}${orgBadge}</td>
             <td>${role.description || '-'}</td>
             <td>
                 <span class="badge ${role.isAdmin ? 'bg-danger' : 'bg-secondary'}">
@@ -746,6 +928,9 @@ async function populateRoleForm(roleId) {
         document.getElementById('roleId').value = role.id;
         document.getElementById('roleName').value = role.name;
         document.getElementById('roleDescription').value = role.description || '';
+
+        const roleOrgSelect = document.getElementById('roleOrganization');
+        if (roleOrgSelect) roleOrgSelect.value = role.organizationId || '';
 
         // Устанавливаем чекбоксы прав
         for (const permission in role) {
@@ -832,7 +1017,8 @@ async function saveRole() {
             name,
             description,
             ...permissions,
-            allowedCategories
+            allowedCategories,
+            organizationId: document.getElementById('roleOrganization')?.value ? parseInt(document.getElementById('roleOrganization').value) : null
         };
 
         let response;
