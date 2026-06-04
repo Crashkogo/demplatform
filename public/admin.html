@@ -510,11 +510,16 @@
                             </button>
                         </div>
 
-                        <!-- Поиск пользователей -->
+                        <!-- Поиск и фильтр пользователей -->
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <input type="text" class="form-control" id="userSearch"
                                     placeholder="Поиск пользователей...">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="userOrgFilter">
+                                    <option value="">Все организации</option>
+                                </select>
                             </div>
                         </div>
 
@@ -551,6 +556,15 @@
                                 <i class="bi bi-plus-circle me-2"></i>
                                 Добавить роль
                             </button>
+                        </div>
+
+                        <!-- Фильтр ролей -->
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <select class="form-select" id="roleOrgFilter">
+                                    <option value="">Все организации</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div class="table-responsive">

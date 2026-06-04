@@ -222,6 +222,12 @@ function initializeEventListeners() {
         searchUsers(this.value);
     });
 
+    // Фильтр пользователей по организации
+    document.getElementById('userOrgFilter')?.addEventListener('change', loadUsers);
+
+    // Фильтр ролей по организации
+    document.getElementById('roleOrgFilter')?.addEventListener('change', loadRoles);
+
     // Поиск материалов
     document.getElementById('materialSearch').addEventListener('input', function () {
         searchMaterials();
@@ -498,7 +504,9 @@ async function loadUsers() {
             }
         }
 
-        const response = await axios.get('/api/admin/users');
+        const orgFilterVal = document.getElementById('userOrgFilter')?.value;
+        const params = orgFilterVal ? { organizationId: orgFilterVal } : {};
+        const response = await axios.get('/api/admin/users', { params });
 
         if (response.data.success) {
             allUsers = response.data.data;
@@ -851,7 +859,9 @@ function resetUserForm() {
 // Загрузка ролей
 async function loadRoles() {
     try {
-        const response = await axios.get('/api/roles');
+        const orgFilterVal = document.getElementById('roleOrgFilter')?.value;
+        const params = orgFilterVal ? { organizationId: orgFilterVal } : {};
+        const response = await axios.get('/api/roles', { params });
         if (response.data.success) {
             allRoles = response.data.data;
             renderRoles(allRoles);
