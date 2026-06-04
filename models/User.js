@@ -131,6 +131,11 @@ User.init({
         defaultValue: 0,
         allowNull: false,
         field: 'token_version'
+    },
+    organizationId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        field: 'organization_id'
     }
 }, {
     sequelize,

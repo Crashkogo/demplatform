@@ -285,6 +285,11 @@ Role.init({
         defaultValue: false,
         field: 'can_generate_pro_review'
     },
+    organizationId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        field: 'organization_id'
+    },
 }, {
     sequelize,
     modelName: 'Role',
