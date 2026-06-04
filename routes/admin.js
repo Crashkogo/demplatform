@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { User, Material, Category, sequelize, AuditEvent } = require('../models');
+const { User, Material, Category, sequelize, AuditEvent, Organization } = require('../models');
 const { Op } = require('sequelize');
 const { authenticateToken, requireAdmin, invalidateUserCache, invalidateUserSessions } = require('../middleware/auth');
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
@@ -150,12 +150,16 @@ const canViewUsersList = (req, res, next) => {
 router.get('/users', [authenticateToken, canViewUsersList], async (req, res) => {
     try {
         const { page = 1, limit = 20, search } = req.query;
+        const { organizationId } = req.query;
 
         const whereClause = {};
         if (search) {
             whereClause.login = {
                 [sequelize.Sequelize.Op.iLike]: `%${search}%`
             };
+        }
+        if (organizationId) {
+            whereClause.organizationId = parseInt(organizationId);
         }
 
         const { Role } = require('../models');
@@ -167,6 +171,12 @@ router.get('/users', [authenticateToken, canViewUsersList], async (req, res) => 
                 as: 'roles',
                 through: { attributes: [] },
                 attributes: ['id', 'name', 'isAdmin']
+            },
+            {
+                model: Organization,
+                as: 'organization',
+                attributes: ['id', 'name'],
+                required: false
             }],
             order: [['createdAt', 'DESC']],
             limit: parseInt(limit),
@@ -204,7 +214,7 @@ router.post('/users', [writeLimiter, authenticateToken, requireAdmin, ...userVal
             });
         }
 
-        const { login, password, roleIds } = req.body;
+        const { login, password, roleIds, organizationId } = req.body;
 
         if (!roleIds || roleIds.length === 0) {
             return res.status(400).json({
@@ -222,7 +232,7 @@ router.post('/users', [writeLimiter, authenticateToken, requireAdmin, ...userVal
             });
         }
 
-        const user = new User({ login, password });
+        const user = new User({ login, password, organizationId: organizationId ? parseInt(organizationId) : null });
         await user.save();
         await user.setRoles(roleIds.map(Number));
 
@@ -244,7 +254,7 @@ router.post('/users', [writeLimiter, authenticateToken, requireAdmin, ...userVal
 router.put('/users/:id', [writeLimiter, authenticateToken, requireAdmin], async (req, res) => {
     try {
         const { id } = req.params;
-        const { login, roleIds, password } = req.body;
+        const { login, roleIds, password, organizationId } = req.body;
 
         const user = await User.findByPk(id);
         if (!user) {
@@ -264,6 +274,11 @@ router.put('/users/:id', [writeLimiter, authenticateToken, requireAdmin], async 
                 });
             }
             user.login = login;
+        }
+
+        // Обновляем организацию (null — убрать из организации)
+        if (organizationId !== undefined) {
+            user.organizationId = organizationId ? parseInt(organizationId) : null;
         }
 
         // Обновляем роли — инвалидируем все сессии пользователя
