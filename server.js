@@ -48,6 +48,7 @@ const adminRoutes = require('./routes/admin');
 const roleRoutes = require('./routes/roles');
 const articleRoutes = require('./routes/articles');
 const proReviewRoutes = require('./routes/proReview');
+const organizationRoutes = require('./routes/organizations');
 
 const app = express();
 
@@ -209,6 +210,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/api/organizations', organizationRoutes);
 app.use('/api', articleRoutes);
 app.use('/api', proReviewRoutes);
 
