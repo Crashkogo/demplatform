@@ -49,6 +49,9 @@ router.post('/', [writeLimiter, authenticateToken, requireAdmin, ...orgValidatio
         const org = await Organization.create({ name, description });
         res.status(201).json({ success: true, message: 'Организация создана', data: org });
     } catch (error) {
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            return res.status(400).json({ success: false, message: 'Организация с таким названием уже существует' });
+        }
         logger.error('Create organization error:', error);
         res.status(500).json({ success: false, message: 'Ошибка создания организации' });
     }
@@ -101,7 +104,7 @@ router.delete('/:id', [writeLimiter, authenticateToken, requireAdmin], async (re
         if (userCount > 0 || roleCount > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Нельзя удалить: к организации привязаны ${userCount} пользователей и ${roleCount} ролей. Сначала переназначьте их.`
+                message: 'Нельзя удалить организацию: существуют привязанные пользователи или роли. Сначала переназначьте их.'
             });
         }
 
