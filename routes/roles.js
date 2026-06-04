@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { Role, Category } = require('../models');
+const { Role, Category, Organization } = require('../models');
 const { authenticateToken, invalidateAllUserCache } = require('../middleware/auth');
 const { checkAccess } = require('../middleware/authorization');
 const { writeLimiter } = require('../middleware/rateLimiter');
@@ -36,7 +36,22 @@ router.get('/', authenticateToken, async (req, res) => {
             return res.status(403).json({ success: false, message: 'Доступ запрещен' });
         }
 
-        const roles = await Role.findAll({ order: [['name', 'ASC']] });
+        const { organizationId } = req.query;
+        const whereClause = {};
+        if (organizationId) {
+            whereClause.organizationId = parseInt(organizationId);
+        }
+
+        const roles = await Role.findAll({
+            where: whereClause,
+            order: [['name', 'ASC']],
+            include: [{
+                model: Organization,
+                as: 'organization',
+                attributes: ['id', 'name'],
+                required: false
+            }]
+        });
         res.json({ success: true, data: roles });
     } catch (error) {
         logger.error('Get roles error:', error);
@@ -52,11 +67,12 @@ router.post('/', [writeLimiter, authenticateToken, checkAccess('canManageRoles')
             return res.status(400).json({ success: false, message: 'Ошибки валидации', errors: errors.array() });
         }
 
-        const { name, description, allowedCategories, ...permissions } = req.body;
+        const { name, description, allowedCategories, organizationId, ...permissions } = req.body;
 
         const newRole = await Role.create({
             name,
             description,
+            organizationId: organizationId ? parseInt(organizationId) : null,
             ...permissions
         });
 
@@ -99,7 +115,7 @@ router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canManageRoles
         }
 
         const { id } = req.params;
-        const { name, description, allowedCategories, ...permissions } = req.body;
+        const { name, description, allowedCategories, organizationId, ...permissions } = req.body;
 
         const role = await Role.findByPk(id);
         if (!role) {
@@ -109,6 +125,7 @@ router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canManageRoles
         await role.update({
             name,
             description,
+            organizationId: organizationId !== undefined ? (organizationId ? parseInt(organizationId) : null) : role.organizationId,
             ...permissions
         });
 
