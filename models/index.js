@@ -8,6 +8,7 @@ const AuditEvent = require('./AuditEvent')(sequelize);
 const Article = require('./Article');
 const ArticleSection = require('./ArticleSection');
 const HeaderImage = require('./HeaderImage');
+const Organization = require('./Organization');
 
 // === СВЯЗИ ДЛЯ MATERIAL ===
 Material.belongsTo(Category, { 
@@ -68,6 +69,13 @@ Category.belongsToMany(Role, {
 AuditEvent.belongsTo(User, { foreignKey: 'userId' });
 User.hasMany(AuditEvent, { foreignKey: 'userId' });
 
+// === СВЯЗИ ДЛЯ ORGANIZATION ===
+Organization.hasMany(User, { foreignKey: 'organizationId', as: 'members' });
+User.belongsTo(Organization, { foreignKey: 'organizationId', as: 'organization' });
+
+Organization.hasMany(Role, { foreignKey: 'organizationId', as: 'orgRoles' });
+Role.belongsTo(Organization, { foreignKey: 'organizationId', as: 'organization' });
+
 // === СВЯЗИ ДЛЯ ARTICLE ===
 Article.belongsTo(User, { as: 'author', foreignKey: 'authorId' });
 User.hasMany(Article, { as: 'articles', foreignKey: 'authorId' });
@@ -98,5 +106,6 @@ module.exports = {
     AuditEvent,
     Article,
     ArticleSection,
-    HeaderImage
+    HeaderImage,
+    Organization
 };
