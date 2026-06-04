@@ -1,4 +1,5 @@
 const { Category } = require('../models');
+const { Op } = require('sequelize');
 const logger = require('../utils/logger');
 
 function getRoles(req) {
@@ -116,19 +117,32 @@ const addAccessibleCategories = async (req, res, next) => {
             return next();
         }
 
-        // Объединяем категории только тех ролей, у которых есть право просмотра материалов
-        const map = new Map();
+        // Собираем прямые категории из всех ролей с правами на материалы (уже загружены в authenticateToken)
+        const directIds = new Map();
+        const pathConditions = [];
+
         for (const role of roles) {
-            // Роль должна иметь хотя бы одно из прав на работу с материалами
             const hasAnyMaterialPermission = role.canViewMaterials || role.canCreateMaterials ||
                 role.canEditMaterials || role.canDeleteMaterials || role.canDownloadMaterials;
             if (!hasAnyMaterialPermission) continue;
 
-            const cats = await role.getAccessibleCategories();
-            cats.forEach(c => map.set(c.id, c));
+            for (const cat of (role.allowedCategories || [])) {
+                if (!directIds.has(cat.id)) {
+                    directIds.set(cat.id, true);
+                    if (cat.path) pathConditions.push({ path: { [Op.like]: `${cat.path}/%` } });
+                }
+            }
         }
 
-        req.accessibleCategories = Array.from(map.keys());
+        if (directIds.size === 0) {
+            req.accessibleCategories = [];
+            return next();
+        }
+
+        // Один запрос: прямые категории + все потомки через path
+        const whereClause = { isActive: true, [Op.or]: [{ id: Array.from(directIds.keys()) }, ...pathConditions] };
+        const allCategories = await Category.findAll({ where: whereClause, attributes: ['id'] });
+        req.accessibleCategories = allCategories.map(c => c.id);
         logger.debug('Доступные категории:', req.accessibleCategories);
 
         next();

@@ -8,6 +8,16 @@ const logger = require('../utils/logger');
 
 const router = express.Router();
 
+// Разрешённые поля прав — isAdmin НИКОГДА не приходит из тела запроса
+const ALLOWED_PERM_FIELDS = [
+    'canViewMaterials', 'canDownloadMaterials', 'canCreateMaterials',
+    'canEditMaterials', 'canDeleteMaterials', 'canCreateCategories',
+    'canEditCategories', 'canDeleteCategories', 'canManageAllCategories',
+    'canViewUsers', 'canCreateUsers', 'canEditUsers', 'canDeleteUsers',
+    'canViewLogs', 'canManageRoles', 'canCreateArticles', 'canReadArticles',
+    'canGenerateProReview', 'categoryAccessType'
+];
+
 // Валидаторы для ролей
 const roleValidation = [
     body('name')
@@ -67,13 +77,16 @@ router.post('/', [writeLimiter, authenticateToken, checkAccess('canManageRoles')
             return res.status(400).json({ success: false, message: 'Ошибки валидации', errors: errors.array() });
         }
 
-        const { name, description, allowedCategories, organizationId, ...permissions } = req.body;
+        const { name, description, allowedCategories, organizationId } = req.body;
+        const safePerms = Object.fromEntries(
+            ALLOWED_PERM_FIELDS.filter(k => k in req.body).map(k => [k, req.body[k]])
+        );
 
         const newRole = await Role.create({
             name,
             description,
             organizationId: organizationId ? parseInt(organizationId) : null,
-            ...permissions
+            ...safePerms
         });
 
         if (allowedCategories && Array.isArray(allowedCategories)) {
@@ -115,7 +128,10 @@ router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canManageRoles
         }
 
         const { id } = req.params;
-        const { name, description, allowedCategories, organizationId, ...permissions } = req.body;
+        const { name, description, allowedCategories, organizationId } = req.body;
+        const safePerms = Object.fromEntries(
+            ALLOWED_PERM_FIELDS.filter(k => k in req.body).map(k => [k, req.body[k]])
+        );
 
         const role = await Role.findByPk(id);
         if (!role) {
@@ -126,7 +142,7 @@ router.put('/:id', [writeLimiter, authenticateToken, checkAccess('canManageRoles
             name,
             description,
             organizationId: organizationId !== undefined ? (organizationId ? parseInt(organizationId) : null) : role.organizationId,
-            ...permissions
+            ...safePerms
         });
 
         if (allowedCategories && Array.isArray(allowedCategories)) {
