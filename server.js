@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
+const os = require('os');
 
 // Автоприменение изменений в development режиме
 if (process.env.NODE_ENV !== 'production') {
@@ -34,7 +35,6 @@ const { sequelize, User, Category, Material } = require('./models');
 const { testConnection, syncDatabase } = require('./config/database');
 
 // Функция для получения локального IP адреса (используется в стартовых логах)
-const os = require('os');
 function getLocalIPAddress() {
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
@@ -234,5 +234,3 @@ const startServer = async () => {
 
 // Запуск сервера
 startServer();
-
-module.exports = app; 
