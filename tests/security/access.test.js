@@ -2,7 +2,7 @@
 const request = require('supertest');
 const app = require('../../app');
 const { User } = require('../../models');
-const { setupTestDb, teardownTestDb } = require('../setup/db');
+const { setupTestDb } = require('../setup/db');
 const { createFixtures } = require('../setup/fixtures');
 
 let fixtures;
@@ -24,10 +24,6 @@ beforeAll(async () => {
         .send({ login: 'test_user', password: 'user_password_test' });
     const userCookies = userLogin.headers['set-cookie'];
     regularCookie = userCookies ? userCookies.join('; ') : '';
-});
-
-afterAll(async () => {
-    await teardownTestDb();
 });
 
 // Тест 7: Не-admin не может создать пользователя → 403

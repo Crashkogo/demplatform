@@ -2,7 +2,7 @@
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const app = require('../../app');
-const { setupTestDb, teardownTestDb } = require('../setup/db');
+const { setupTestDb } = require('../setup/db');
 const { createFixtures } = require('../setup/fixtures');
 
 let fixtures;
@@ -10,10 +10,6 @@ let fixtures;
 beforeAll(async () => {
     await setupTestDb();
     fixtures = await createFixtures();
-});
-
-afterAll(async () => {
-    await teardownTestDb();
 });
 
 // Тест 1: Логин с верным паролем → 200 + токен (в cookie authToken)
@@ -29,7 +25,8 @@ test('Логин с верным паролем возвращает 200 и то
     expect(cookies).toBeDefined();
     const authCookie = cookies.find(c => c.startsWith('authToken='));
     expect(authCookie).toBeDefined();
-    expect(authCookie.length).toBeGreaterThan(10);
+    const tokenValue = authCookie.split('=')[1].split(';')[0];
+    expect(tokenValue.length).toBeGreaterThan(20);
 });
 
 // Тест 2: Логин с неверным паролем → 401

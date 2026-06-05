@@ -2,7 +2,7 @@
 const request = require('supertest');
 const app = require('../../app');
 const { Role } = require('../../models');
-const { setupTestDb, teardownTestDb } = require('../setup/db');
+const { setupTestDb } = require('../setup/db');
 const { createFixtures } = require('../setup/fixtures');
 
 let fixtures;
@@ -20,10 +20,6 @@ beforeAll(async () => {
     // Extract the auth cookie from response
     const cookies = loginRes.headers['set-cookie'];
     adminCookie = cookies ? cookies.join('; ') : '';
-});
-
-afterAll(async () => {
-    await teardownTestDb();
 });
 
 // Тест 5: POST /api/roles с isAdmin:true в теле → isAdmin остаётся false
