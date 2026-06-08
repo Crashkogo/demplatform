@@ -169,8 +169,14 @@ router.delete('/:id', [writeLimiter, authenticateToken, checkAccess('canManageRo
             return res.status(404).json({ success: false, message: 'Роль не найдена' });
         }
 
-        // TODO: Проверить, что роль не используется пользователями
-        
+        const userCount = await role.countUsers();
+        if (userCount > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Нельзя удалить роль: к ней привязано ${userCount} пользователей`
+            });
+        }
+
         await role.destroy();
 
         res.json({ success: true, message: 'Роль удалена успешно' });

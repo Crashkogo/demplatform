@@ -70,3 +70,13 @@ test('Нельзя удалить организацию если к ней пр
     expect(deleteRes.status).toBe(400);
     expect(deleteRes.body.success).toBe(false);
 });
+
+// Тест H2: нельзя удалить роль если к ней привязаны пользователи
+test('DELETE /api/roles/:id с привязанными пользователями возвращает 400', async () => {
+    const res = await request(app)
+        .delete(`/api/roles/${fixtures.regularRole.id}`)
+        .set('Cookie', adminCookie);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+});
