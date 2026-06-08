@@ -88,10 +88,8 @@ class User extends Model {
     // Внутренний метод: возвращает массив ролей (из кэша ассоциации или БД)
     async _getRoles() {
         if (this.roles && Array.isArray(this.roles)) return this.roles;
-        const Role = require('./Role');
-        const roles = await Role.findAll({
-            include: [{ association: 'allowedCategories', through: { attributes: [] } }],
-            through: { model: 'user_roles', where: { user_id: this.id } }
+        const roles = await this.getRoles({
+            include: [{ association: 'allowedCategories', through: { attributes: [] } }]
         });
         this.roles = roles;
         return roles;

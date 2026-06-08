@@ -65,3 +65,17 @@ test('GET /api/auth/me с истёкшим токеном возвращает 4
     expect(res.status).toBe(401);
     expect(res.body.success).toBe(false);
 });
+
+// Тест H3: _getRoles() возвращает только роли своего пользователя
+test('_getRoles() возвращает роли только своего пользователя', async () => {
+    const { User } = require('../../models');
+    const regularUser = await User.findByPk(fixtures.regularUser.id);
+    // Сбрасываем кэш чтобы _getRoles() обратился к БД
+    regularUser.roles = null;
+    const roles = await regularUser._getRoles();
+
+    // regularUser имеет только regularRole (isAdmin:false)
+    // Если _getRoles() сломан — вернёт ВСЕ роли (2 штуки)
+    expect(roles).toHaveLength(1);
+    expect(roles[0].isAdmin).toBe(false);
+});
