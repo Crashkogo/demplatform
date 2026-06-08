@@ -78,9 +78,13 @@ const checkAccess = (requiredPermission) => {
             }
 
             if (!categoryIdToCheck) {
-                // Без конкретной категории — достаточно наличия права
-                if (requiredPermission === 'canViewMaterials') return next();
-                return res.status(400).json({ success: false, message: 'ID категории для проверки доступа не указан' });
+                // Без конкретной категории — проверяем только наличие права.
+                // Это случается при multipart-запросах (Multer не распарсил тело до checkAccess).
+                // Категорийная проверка произойдёт в обработчике маршрута.
+                if (!userHasPermission(req, requiredPermission)) {
+                    return res.status(403).json({ success: false, message: 'Доступ запрещен: недостаточно прав' });
+                }
+                return next();
             }
 
             categoryIdToCheck = parseInt(categoryIdToCheck);

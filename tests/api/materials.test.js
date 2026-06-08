@@ -59,9 +59,7 @@ test('POST /api/materials без файла → 400', async () => {
     expect(res.status).toBe(400);
 });
 
-test('POST /api/materials без canCreateMaterials → отказ (400 или 403)', async () => {
-    // checkAccess запускается до Multer, поэтому req.body ещё не распарсен.
-    // Без categoryId в теле middleware возвращает 400 (не найден ID категории).
+test('POST /api/materials без canCreateMaterials → 403', async () => {
     const fileBuffer = Buffer.from('content', 'utf-8');
 
     const res = await request(app)
@@ -71,7 +69,7 @@ test('POST /api/materials без canCreateMaterials → отказ (400 или 4
         .field('categoryId', testCategory.id.toString())
         .attach('file', fileBuffer, { filename: 'test.txt', contentType: 'text/plain' });
 
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBe(403);
     expect(res.body.success).toBe(false);
 });
 
