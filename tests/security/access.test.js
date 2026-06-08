@@ -82,9 +82,10 @@ test('DELETE /api/roles/:id с привязанными пользователя
 });
 
 // Тест H4: создание пользователя атомарно — user и roles создаются вместе
+// Примечание: Sequelize's setRoles() с несуществующим ID молча игнорирует его (не бросает исключение),
+// поэтому проверить откат через невалидный roleId невозможно без мокирования.
+// Тест проверяет корректность успешного сценария: user + roles создаются в одной транзакции.
 test('POST /api/admin/users создаёт пользователя с ролями атомарно', async () => {
-    const { User } = require('../../models');
-
     const res = await request(app)
         .post('/api/admin/users')
         .set('Cookie', adminCookie)
