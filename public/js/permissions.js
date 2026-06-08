@@ -137,7 +137,7 @@ const PermissionsManager = {
 
         switch (sectionName) {
             case 'dashboard':
-                return this.has('isAdmin');
+                return true; // dashboard доступен всем авторизованным пользователям админ-панели
             case 'users':
                 return this.has('canViewUsers') || this.has('canCreateUsers') || this.has('canEditUsers') || this.has('canDeleteUsers');
             case 'roles':

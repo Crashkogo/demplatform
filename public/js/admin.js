@@ -447,7 +447,7 @@ async function loadDashboard() {
                 stats.materials.popular.forEach(material => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td>${material.title}</td>
+                        <td>${escapeHtml(material.title)}</td>
                         <td><span class="badge bg-primary">${material.viewCount || 0}</span></td>
                     `;
                     popularTable.appendChild(row);
@@ -465,7 +465,7 @@ async function loadDashboard() {
                     const row = document.createElement('tr');
                     const date = new Date(material.createdAt).toLocaleDateString('ru-RU');
                     row.innerHTML = `
-                        <td>${material.title}</td>
+                        <td>${escapeHtml(material.title)}</td>
                         <td><small class="text-muted">${date}</small></td>
                     `;
                     recentTable.appendChild(row);
@@ -572,7 +572,7 @@ function renderUsers(users) {
         }
 
         row.innerHTML = `
-            <td>${user.login}${orgBadge}</td>
+            <td>${escapeHtml(user.login)}${orgBadge}</td>
             <td>${rolesBadges}</td>
             <td>${createdDate}</td>
             <td>${lastLogin}</td>
@@ -684,8 +684,8 @@ function renderOrganizations(orgs) {
         row.innerHTML = `
             <td>${escapeHtml(org.name)}</td>
             <td>${escapeHtml(org.description || '—')}</td>
-            <td>—</td>
-            <td>—</td>
+            <td>${org.userCount ?? '—'}</td>
+            <td>${org.roleCount ?? '—'}</td>
             <td>${actionsHTML}</td>
         `;
         tbody.appendChild(row);
@@ -911,8 +911,8 @@ function renderRoles(roles) {
         }
 
         row.innerHTML = `
-            <td>${role.name}${orgBadge}</td>
-            <td>${role.description || '-'}</td>
+            <td>${escapeHtml(role.name)}${orgBadge}</td>
+            <td>${escapeHtml(role.description || '-')}</td>
             <td>
                 <span class="badge ${role.isAdmin ? 'bg-danger' : 'bg-secondary'}">
                     ${role.isAdmin ? 'Да' : 'Нет'}
@@ -1161,8 +1161,8 @@ function renderCategories(categories) {
         }
 
         row.innerHTML = `
-            <td>${'  '.repeat(category.level)}${category.name}</td>
-            <td>${parentName}</td>
+            <td>${'  '.repeat(category.level)}${escapeHtml(category.name)}</td>
+            <td>${escapeHtml(parentName)}</td>
             <td>${category.level}</td>
             <td>${category.order}</td>
             <td>

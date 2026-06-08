@@ -24,7 +24,15 @@ const orgValidation = [
 router.get('/', authenticateToken, async (req, res) => {
     try {
         const orgs = await Organization.findAll({ order: [['name', 'ASC']] });
-        res.json({ success: true, data: orgs });
+        const { Op } = require('sequelize');
+        const orgsWithCounts = await Promise.all(orgs.map(async (org) => {
+            const [userCount, roleCount] = await Promise.all([
+                User.count({ where: { organizationId: org.id } }),
+                Role.count({ where: { organizationId: org.id } })
+            ]);
+            return { ...org.toJSON(), userCount, roleCount };
+        }));
+        res.json({ success: true, data: orgsWithCounts });
     } catch (error) {
         logger.error('Get organizations error:', error);
         res.status(500).json({ success: false, message: 'Ошибка получения организаций' });
