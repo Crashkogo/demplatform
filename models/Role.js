@@ -12,8 +12,9 @@ class Role extends Model {
         return this[permission] === true;
     }
 
-    // Проверка доступа к конкретной категории с учетом каскадности
-    async hasCategoryAccess(categoryId) {
+    // Проверка доступа к конкретной категории с учетом каскадности.
+    // preloadedPath — уже загруженный path категории, позволяет избежать лишнего запроса к БД.
+    async hasCategoryAccess(categoryId, preloadedPath = null) {
         // Администратор имеет доступ ко всем категориям
         if (this.isAdmin) return true;
 
@@ -39,16 +40,18 @@ class Role extends Model {
             return true;
         }
 
-        // Получаем целевую категорию для проверки родителей
-        const Category = require('./Category');
-        const targetCategory = await Category.findByPk(categoryId);
-
-        if (!targetCategory || !targetCategory.path) {
-            return false;
+        // Получаем path целевой категории для проверки родителей
+        let targetPath = preloadedPath;
+        if (targetPath === null) {
+            const Category = require('./Category');
+            const targetCategory = await Category.findByPk(categoryId, { attributes: ['id', 'path'] });
+            if (!targetCategory || !targetCategory.path) return false;
+            targetPath = targetCategory.path;
         }
+        if (!targetPath) return false;
 
         // Проверяем, есть ли доступ к родительским категориям (каскадный доступ)
-        const parentIds = targetCategory.path.split('/').filter(Boolean).map(Number);
+        const parentIds = targetPath.split('/').filter(Boolean).map(Number);
         for (const parentId of parentIds) {
             if (allowedCategoryIds.has(parentId)) {
                 return true;

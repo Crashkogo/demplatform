@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { Material, Category } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
-const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
+const { checkAccess, addAccessibleCategories, canUserActOnCategory, userIsAdmin } = require('../middleware/authorization');
 const { handleUpload, deleteFile } = require('../middleware/upload');
 const { logEvent } = require('../services/auditService');
 const convertService = require('../services/convertService');
@@ -502,6 +502,21 @@ router.post('/', [uploadLimiter, authenticateToken, checkAccess('canCreateMateri
                 success: false,
                 message: 'Категория не найдена'
             });
+        }
+
+        // Проверяем доступ к конкретной категории (не-администраторы)
+        if (!userIsAdmin(req)) {
+            const roles = req.user?.roles || [];
+            const hasAccess = await canUserActOnCategory(roles, 'canCreateMaterials', categoryId);
+            if (!hasAccess) {
+                if (req.file) {
+                    deleteFile(req.file.path);
+                }
+                return res.status(403).json({
+                    success: false,
+                    message: 'Доступ к данной категории запрещен'
+                });
+            }
         }
 
         // Парсим tags из JSON строки

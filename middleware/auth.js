@@ -85,7 +85,7 @@ const authenticateToken = async (req, res, next) => {
 
         // Проверяем версию токена — защита от использования старых токенов
         // после принудительного логаута или смены ролей
-        if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+        if (decoded.tokenVersion === undefined || decoded.tokenVersion !== user.tokenVersion) {
             return res.status(401).json({ success: false, message: 'Токен отозван. Войдите снова.' });
         }
 

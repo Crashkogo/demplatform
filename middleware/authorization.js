@@ -21,19 +21,23 @@ function userCanManageAllCategories(req) {
 /**
  * Ключевая проверка: конкретная роль даёт и право, и доступ к категории.
  * Только так можно корректно разграничить права при множественных ролях.
+ * categoryPath — preloaded path категории, чтобы не делать лишний запрос к БД.
  */
-async function canRoleActOnCategory(role, permission, categoryId) {
+async function canRoleActOnCategory(role, permission, categoryId, categoryPath = null) {
     if (role.isAdmin || role.canManageAllCategories) return true;
     if (!role[permission]) return false;
-    return await role.hasCategoryAccess(categoryId);
+    return await role.hasCategoryAccess(categoryId, categoryPath);
 }
 
 /**
  * Хотя бы одна из ролей пользователя даёт право + доступ к категории одновременно.
+ * Загружает категорию один раз и передаёт path во все проверки ролей.
  */
 async function canUserActOnCategory(roles, permission, categoryId) {
+    const category = await Category.findByPk(categoryId, { attributes: ['id', 'path'] });
+    const categoryPath = category ? category.path : null;
     for (const role of roles) {
-        if (await canRoleActOnCategory(role, permission, categoryId)) return true;
+        if (await canRoleActOnCategory(role, permission, categoryId, categoryPath)) return true;
     }
     return false;
 }
