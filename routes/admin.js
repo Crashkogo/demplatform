@@ -285,7 +285,11 @@ router.put('/users/:id', [writeLimiter, authenticateToken, requireAdmin], async 
 
         // Обновляем организацию (null — убрать из организации)
         if (organizationId !== undefined) {
-            user.organizationId = organizationId ? parseInt(organizationId) : null;
+            const newOrgId = organizationId ? parseInt(organizationId) : null;
+            if (user.organizationId !== newOrgId) {
+                user.organizationId = newOrgId;
+                await invalidateUserSessions(user.id);
+            }
         }
 
         // Обновляем роли — инвалидируем все сессии пользователя

@@ -106,3 +106,29 @@ test('POST /api/admin/users создаёт пользователя с роля�
     expect(user.roles).toHaveLength(1);
     expect(user.roles[0].id).toBe(fixtures.regularRole.id);
 });
+
+// Тест H5: смена организации пользователя инвалидирует его сессии
+test('Смена организации пользователя увеличивает tokenVersion', async () => {
+    // Запоминаем текущий tokenVersion
+    const userBefore = await User.findByPk(fixtures.regularUser.id);
+    const versionBefore = userBefore.tokenVersion;
+
+    // Создаём организацию
+    const orgRes = await request(app)
+        .post('/api/organizations')
+        .set('Cookie', adminCookie)
+        .send({ name: 'Орг для теста H5' });
+    expect(orgRes.status).toBe(201);
+    const orgId = orgRes.body.data.id;
+
+    // Меняем организацию пользователя
+    const updateRes = await request(app)
+        .put(`/api/admin/users/${fixtures.regularUser.id}`)
+        .set('Cookie', adminCookie)
+        .send({ organizationId: orgId });
+    expect(updateRes.status).toBe(200);
+
+    // tokenVersion должен увеличиться
+    const userAfter = await User.findByPk(fixtures.regularUser.id);
+    expect(userAfter.tokenVersion).toBeGreaterThan(versionBefore);
+});
