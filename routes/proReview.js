@@ -11,7 +11,7 @@ const {
     Table, TableRow, TableCell, WidthType,
 } = require('docx');
 
-const { Article, ArticleSection, HeaderImage, User } = require('../models');
+const { Article, ArticleSection, ArticleSubsection, HeaderImage, User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const convertService = require('../services/convertService');
 const { htmlToDocxParagraphs } = require('../utils/htmlToDocx');
@@ -190,6 +190,7 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
             include: [
                 { model: ArticleSection, as: 'sections', through: { attributes: [] } },
                 { model: User, as: 'author', attributes: ['id', 'login'] },
+                { model: ArticleSubsection, as: 'subsection', attributes: ['id', 'name', 'sortOrder'] },
             ],
             order: [['publishedAt', 'ASC']],
         });
@@ -219,8 +220,16 @@ router.get('/pro-review/generate', authenticateToken, canGenerate, writeLimiter,
         const bodyChildren = [];
 
         for (const section of allSections) {
-            const arts = sectionArticles.get(section.id) || [];
+            let arts = sectionArticles.get(section.id) || [];
             if (arts.length === 0) continue;
+
+            // Сортируем статьи внутри раздела: сначала по sortOrder под-раздела, потом по дате
+            arts = arts.slice().sort((a, b) => {
+                const aOrder = a.subsection?.sortOrder ?? 999;
+                const bOrder = b.subsection?.sortOrder ?? 999;
+                if (aOrder !== bOrder) return aOrder - bOrder;
+                return new Date(a.publishedAt) - new Date(b.publishedAt);
+            });
 
             bodyChildren.push(new Paragraph({
                 children: [new TextRun({

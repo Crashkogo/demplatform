@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
 const sanitizeHtml = require('sanitize-html');
-const { Article, ArticleSection, HeaderImage, User } = require('../models');
+const { Article, ArticleSection, ArticleSubsection, HeaderImage, User } = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { writeLimiter, uploadLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
@@ -130,6 +130,74 @@ router.delete('/article-sections/:id', authenticateToken, canCreate, writeLimite
 });
 
 // ============================================================
+// ARTICLE SUBSECTIONS (только администратор)
+// ============================================================
+
+const canAdminSubsections = (req, res, next) => {
+    const roles = req.user.roles || [];
+    if (roles.some(r => r.isAdmin)) return next();
+    return res.status(403).json({ success: false, message: 'Только администратор может управлять под-разделами' });
+};
+
+// GET /api/article-subsections
+router.get('/article-subsections', authenticateToken, canRead, async (req, res) => {
+    try {
+        const subsections = await ArticleSubsection.findAll({ order: [['sortOrder', 'ASC'], ['name', 'ASC']] });
+        res.json({ success: true, data: subsections });
+    } catch (err) {
+        logger.error('GET /article-subsections:', err);
+        res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    }
+});
+
+// POST /api/article-subsections
+router.post('/article-subsections', authenticateToken, canAdminSubsections, writeLimiter, async (req, res) => {
+    try {
+        const { name, sortOrder } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, message: 'Название обязательно' });
+        }
+        const sub = await ArticleSubsection.create({ name: name.trim(), sortOrder: sortOrder ?? 0 });
+        res.status(201).json({ success: true, data: sub });
+    } catch (err) {
+        logger.error('POST /article-subsections:', err);
+        res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    }
+});
+
+// PUT /api/article-subsections/:id
+router.put('/article-subsections/:id', authenticateToken, canAdminSubsections, writeLimiter, async (req, res) => {
+    try {
+        const sub = await ArticleSubsection.findByPk(req.params.id);
+        if (!sub) return res.status(404).json({ success: false, message: 'Под-раздел не найден' });
+        const { name, sortOrder } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, message: 'Название обязательно' });
+        }
+        const upd = { name: name.trim() };
+        if (sortOrder !== undefined) upd.sortOrder = parseInt(sortOrder, 10);
+        await sub.update(upd);
+        res.json({ success: true, data: sub });
+    } catch (err) {
+        logger.error('PUT /article-subsections/:id:', err);
+        res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    }
+});
+
+// DELETE /api/article-subsections/:id
+router.delete('/article-subsections/:id', authenticateToken, canAdminSubsections, writeLimiter, async (req, res) => {
+    try {
+        const sub = await ArticleSubsection.findByPk(req.params.id);
+        if (!sub) return res.status(404).json({ success: false, message: 'Под-раздел не найден' });
+        await sub.destroy();
+        res.json({ success: true, message: 'Под-раздел удалён' });
+    } catch (err) {
+        logger.error('DELETE /article-subsections/:id:', err);
+        res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    }
+});
+
+// ============================================================
 // ARTICLES
 // ============================================================
 
@@ -144,6 +212,13 @@ router.get('/articles', authenticateToken, canRead, async (req, res) => {
         const rawSectionIds = req.query.sectionIds;
         const sectionIds = rawSectionIds
             ? (Array.isArray(rawSectionIds) ? rawSectionIds : [rawSectionIds])
+                .map(id => parseInt(id, 10)).filter(Boolean)
+            : [];
+
+        // subsectionIds — аналогично
+        const rawSubsectionIds = req.query.subsectionIds;
+        const subsectionIds = rawSubsectionIds
+            ? (Array.isArray(rawSubsectionIds) ? rawSubsectionIds : [rawSubsectionIds])
                 .map(id => parseInt(id, 10)).filter(Boolean)
             : [];
 
@@ -167,9 +242,14 @@ router.get('/articles', authenticateToken, canRead, async (req, res) => {
             ];
         }
 
+        if (subsectionIds.length > 0) {
+            where.subsectionId = { [Op.in]: subsectionIds };
+        }
+
         const include = [
             { model: ArticleSection, as: 'sections', through: { attributes: [] } },
-            { model: User, as: 'author', attributes: ['id', 'login'] }
+            { model: User, as: 'author', attributes: ['id', 'login'] },
+            { model: ArticleSubsection, as: 'subsection', attributes: ['id', 'name', 'sortOrder'] }
         ];
 
         if (sectionIds.length > 0) {
@@ -199,7 +279,8 @@ router.get('/articles/:id', authenticateToken, canRead, async (req, res) => {
         const article = await Article.findByPk(req.params.id, {
             include: [
                 { model: ArticleSection, as: 'sections', through: { attributes: [] } },
-                { model: User, as: 'author', attributes: ['id', 'login'] }
+                { model: User, as: 'author', attributes: ['id', 'login'] },
+                { model: ArticleSubsection, as: 'subsection', attributes: ['id', 'name', 'sortOrder'] }
             ]
         });
         if (!article) return res.status(404).json({ success: false, message: 'Статья не найдена' });
@@ -213,7 +294,7 @@ router.get('/articles/:id', authenticateToken, canRead, async (req, res) => {
 // POST /api/articles
 router.post('/articles', authenticateToken, canCreate, writeLimiter, async (req, res) => {
     try {
-        const { title, content, sectionIds, publishedAt } = req.body;
+        const { title, content, sectionIds, subsectionId, publishedAt } = req.body;
         if (!title || !title.trim()) {
             return res.status(400).json({ success: false, message: 'Заголовок обязателен' });
         }
@@ -221,7 +302,8 @@ router.post('/articles', authenticateToken, canCreate, writeLimiter, async (req,
             title: title.trim(),
             content: sanitizeContent(content),
             authorId: req.user.id,
-            publishedAt: publishedAt ? new Date(publishedAt) : new Date()
+            publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
+            subsectionId: subsectionId ? parseInt(subsectionId, 10) : null
         });
         if (Array.isArray(sectionIds) && sectionIds.length > 0) {
             const sections = await ArticleSection.findAll({ where: { id: sectionIds } });
@@ -230,7 +312,8 @@ router.post('/articles', authenticateToken, canCreate, writeLimiter, async (req,
         const result = await Article.findByPk(article.id, {
             include: [
                 { model: ArticleSection, as: 'sections', through: { attributes: [] } },
-                { model: User, as: 'author', attributes: ['id', 'login'] }
+                { model: User, as: 'author', attributes: ['id', 'login'] },
+                { model: ArticleSubsection, as: 'subsection', attributes: ['id', 'name', 'sortOrder'] }
             ]
         });
         res.status(201).json({ success: true, data: result });
@@ -246,12 +329,15 @@ router.put('/articles/:id', authenticateToken, canCreate, writeLimiter, async (r
         const article = await Article.findByPk(req.params.id);
         if (!article) return res.status(404).json({ success: false, message: 'Статья не найдена' });
 
-        const { title, content, sectionIds, publishedAt } = req.body;
+        const { title, content, sectionIds, subsectionId, publishedAt } = req.body;
         if (!title || !title.trim()) {
             return res.status(400).json({ success: false, message: 'Заголовок обязателен' });
         }
         const updateData = { title: title.trim(), content: sanitizeContent(content) };
         if (publishedAt) updateData.publishedAt = new Date(publishedAt);
+        if (subsectionId !== undefined) {
+            updateData.subsectionId = subsectionId ? parseInt(subsectionId, 10) : null;
+        }
         await article.update(updateData);
 
         // Обновляем разделы только если клиент явно передал непустой массив.
@@ -265,7 +351,8 @@ router.put('/articles/:id', authenticateToken, canCreate, writeLimiter, async (r
         const result = await Article.findByPk(article.id, {
             include: [
                 { model: ArticleSection, as: 'sections', through: { attributes: [] } },
-                { model: User, as: 'author', attributes: ['id', 'login'] }
+                { model: User, as: 'author', attributes: ['id', 'login'] },
+                { model: ArticleSubsection, as: 'subsection', attributes: ['id', 'name', 'sortOrder'] }
             ]
         });
         res.json({ success: true, data: result });

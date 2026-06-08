@@ -2174,21 +2174,26 @@ function resetHistoryFiltersAndLoad() {
 
 let allArticles = [];
 let allArticleSections = [];
+let allArticleSubsections = [];
 let _adminArticlesOffset = 0;
 const ADMIN_ARTICLES_PAGE_SIZE = 50;
 let articleTinyMCE = null;
 
 async function loadArticlesSection() {
     await loadArticleSections();
+    await loadArticleSubsections();
     await loadArticles();
     initArticleEventListeners();
     initAdminArticleSectionFilter();
 
     const canCreate = PermissionsManager.has('canCreateArticles');
+    const isAdmin = PermissionsManager.has('isAdmin');
     const addBtn = document.getElementById('addArticleBtn');
     const manageSectionsBtn = document.getElementById('manageSectionsBtn');
+    const manageSubsectionsBtn = document.getElementById('manageSubsectionsBtn');
     if (addBtn) addBtn.style.display = canCreate ? '' : 'none';
     if (manageSectionsBtn) manageSectionsBtn.style.display = canCreate ? '' : 'none';
+    if (manageSubsectionsBtn) manageSubsectionsBtn.style.display = isAdmin ? '' : 'none';
 
     // Блок шапочной картинки — admins + пользователи с правом создания статей
     const canManageHeader = PermissionsManager.has('isAdmin') || PermissionsManager.has('canCreateArticles');
@@ -2220,18 +2225,34 @@ function initAdminArticleSectionFilter() {
             applyAdminArticleFilters();
         });
         if (boxesEl) boxesEl.addEventListener('change', applyAdminArticleFilters);
+        const subBoxesEl = document.getElementById('adminArticleSubsectionCheckboxes');
+        if (subBoxesEl) subBoxesEl.addEventListener('change', applyAdminArticleFilters);
     }
 
     // Чекбоксы разделов — только если разделы есть
-    if (!filtersEl || !boxesEl || !allArticleSections || allArticleSections.length === 0) return;
+    if (filtersEl && boxesEl && allArticleSections && allArticleSections.length > 0) {
+        boxesEl.innerHTML = allArticleSections.map(s => `
+            <label class="badge bg-light text-dark border d-flex align-items-center gap-1" style="cursor:pointer;font-size:0.8rem;font-weight:normal">
+                <input type="checkbox" class="admin-section-cb" value="${s.id}" style="cursor:pointer">
+                ${escapeHtml(s.name)}
+            </label>
+        `).join('');
+        filtersEl.style.display = '';
+    }
 
-    boxesEl.innerHTML = allArticleSections.map(s => `
-        <label class="badge bg-light text-dark border d-flex align-items-center gap-1" style="cursor:pointer;font-size:0.8rem;font-weight:normal">
-            <input type="checkbox" class="admin-section-cb" value="${s.id}" style="cursor:pointer">
-            ${escapeHtml(s.name)}
-        </label>
-    `).join('');
-    filtersEl.style.display = '';
+    // Чекбоксы под-разделов
+    const subFiltersEl = document.getElementById('adminArticleSubsectionFilters');
+    const subBoxesEl2 = document.getElementById('adminArticleSubsectionCheckboxes');
+    if (subFiltersEl && subBoxesEl2 && allArticleSubsections && allArticleSubsections.length > 0) {
+        const sorted = [...allArticleSubsections].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+        subBoxesEl2.innerHTML = sorted.map(s => `
+            <label class="badge bg-light text-dark border d-flex align-items-center gap-1" style="cursor:pointer;font-size:0.8rem;font-weight:normal">
+                <input type="checkbox" class="admin-subsection-cb" value="${s.id}" style="cursor:pointer">
+                ${escapeHtml(s.name)}
+            </label>
+        `).join('');
+        subFiltersEl.style.display = '';
+    }
 }
 
 async function loadHeaderImage() {
@@ -2297,6 +2318,24 @@ function initArticleEventListeners() {
         if (e.key === 'Enter') { e.preventDefault(); addSection(); }
     });
 
+    document.getElementById('manageSubsectionsBtn')?.addEventListener('click', () => {
+        renderSubsectionsList();
+        new bootstrap.Modal(document.getElementById('subsectionsModal')).show();
+    });
+
+    document.getElementById('addSubsectionBtn')?.addEventListener('click', addSubsection);
+    document.getElementById('newSubsectionName')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); addSubsection(); }
+    });
+
+    document.getElementById('subsectionsList')?.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-subsection-action]');
+        if (!btn) return;
+        const action = btn.dataset.subsectionAction;
+        const id = parseInt(btn.dataset.id);
+        if (action === 'delete') await deleteSubsection(id);
+    });
+
     // Делегирование для кнопок статей
     document.getElementById('articlesTableBody').addEventListener('click', async (e) => {
         const btn = e.target.closest('[data-article-action]');
@@ -2320,7 +2359,7 @@ function initArticleEventListeners() {
 async function loadArticles(append = false) {
     const tbody = document.getElementById('articlesTableBody');
     if (!append && tbody) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div></td></tr>';
         _adminArticlesOffset = 0;
     }
     try {
@@ -2332,10 +2371,12 @@ async function loadArticles(append = false) {
         const dateFrom = document.getElementById('adminDateFrom')?.value;
         const dateTo = document.getElementById('adminDateTo')?.value;
         const checkedSections = Array.from(document.querySelectorAll('.admin-section-cb:checked')).map(cb => cb.value);
+        const checkedSubsections = Array.from(document.querySelectorAll('.admin-subsection-cb:checked')).map(cb => cb.value);
         if (search) params.search = search;
         if (dateFrom) params.dateFrom = dateFrom;
         if (dateTo) params.dateTo = dateTo;
         if (checkedSections.length > 0) params.sectionIds = checkedSections;
+        if (checkedSubsections.length > 0) params.subsectionIds = checkedSubsections;
 
         const response = await axios.get('/api/articles', { params });
         if (response.data.success) {
@@ -2361,7 +2402,7 @@ function renderArticles(articles, append = false, total = 0) {
     if (!append) tbody.innerHTML = '';
 
     if (!append && articles.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Статьи не найдены</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Статьи не найдены</td></tr>';
         if (loadMoreEl) loadMoreEl.style.display = 'none';
         return;
     }
@@ -2370,6 +2411,7 @@ function renderArticles(articles, append = false, total = 0) {
     articles.forEach(a => {
         const date = new Date(a.publishedAt || a.createdAt).toLocaleDateString('ru-RU');
         const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${escapeHtml(s.name)}</span>`).join('');
+        const subsection = a.subsection ? `<span class="badge bg-info text-dark">${escapeHtml(a.subsection.name)}</span>` : '—';
         const author = a.author ? escapeHtml(a.author.login) : '—';
         let actions = '';
         if (canEdit) {
@@ -2382,6 +2424,7 @@ function renderArticles(articles, append = false, total = 0) {
         row.innerHTML = `
             <td>${escapeHtml(a.title)}</td>
             <td>${sections || '—'}</td>
+            <td>${subsection}</td>
             <td>${author}</td>
             <td>${date}</td>
             <td>${actions || '—'}</td>
@@ -2409,6 +2452,93 @@ async function loadArticleSections() {
         }
     } catch (err) {
         console.error('Ошибка загрузки разделов статей:', err);
+    }
+}
+
+async function loadArticleSubsections() {
+    try {
+        const response = await axios.get('/api/article-subsections');
+        if (response.data.success) {
+            allArticleSubsections = response.data.data;
+        }
+    } catch (err) {
+        console.error('Ошибка загрузки под-разделов статей:', err);
+    }
+}
+
+function renderSubsectionSelect(selectedId = null) {
+    const select = document.getElementById('articleSubsectionSelect');
+    if (!select) return;
+    const sorted = [...allArticleSubsections].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    select.innerHTML = '<option value="">— не выбран —</option>' +
+        sorted.map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+}
+
+function renderSubsectionsList() {
+    const list = document.getElementById('subsectionsList');
+    if (!list) return;
+    if (allArticleSubsections.length === 0) {
+        list.innerHTML = '<li class="list-group-item text-muted">Под-разделы не созданы</li>';
+        return;
+    }
+    const sorted = [...allArticleSubsections].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+    list.innerHTML = sorted.map(s => `
+        <li class="list-group-item d-flex align-items-center gap-2">
+            <input type="number" class="form-control form-control-sm text-center subsection-order-input"
+                data-id="${s.id}" data-name="${s.name.replace(/"/g, '&quot;')}"
+                value="${s.sortOrder ?? 0}" min="0" max="999"
+                style="width:60px;flex-shrink:0;" title="Порядок в DOCX">
+            <span class="flex-grow-1">${escapeHtml(s.name)}</span>
+            <button class="btn btn-sm btn-outline-danger" data-subsection-action="delete" data-id="${s.id}">
+                <i class="bi bi-trash"></i>
+            </button>
+        </li>
+    `).join('');
+
+    list.querySelectorAll('.subsection-order-input').forEach(input => {
+        input.addEventListener('change', async () => {
+            const id = input.dataset.id;
+            const name = input.dataset.name;
+            const sortOrder = parseInt(input.value, 10) || 0;
+            try {
+                const response = await axios.put(`/api/article-subsections/${id}`, { name, sortOrder });
+                if (response.data.success) {
+                    const sub = allArticleSubsections.find(s => s.id === parseInt(id));
+                    if (sub) sub.sortOrder = sortOrder;
+                }
+            } catch (err) {
+                showError('Ошибка сохранения порядка');
+            }
+        });
+    });
+}
+
+async function addSubsection() {
+    const input = document.getElementById('newSubsectionName');
+    const name = input.value.trim();
+    if (!name) return;
+    try {
+        const response = await axios.post('/api/article-subsections', { name });
+        if (response.data.success) {
+            allArticleSubsections.push(response.data.data);
+            input.value = '';
+            renderSubsectionsList();
+            renderSubsectionSelect(null);
+        }
+    } catch (err) {
+        showError(err.response?.data?.message || 'Ошибка создания под-раздела');
+    }
+}
+
+async function deleteSubsection(id) {
+    if (!confirm('Удалить под-раздел? Статьи останутся, но потеряют привязку к нему.')) return;
+    try {
+        await axios.delete(`/api/article-subsections/${id}`);
+        allArticleSubsections = allArticleSubsections.filter(s => s.id !== id);
+        renderSubsectionsList();
+        renderSubsectionSelect(null);
+    } catch (err) {
+        showError(err.response?.data?.message || 'Ошибка удаления под-раздела');
     }
 }
 
@@ -2531,6 +2661,7 @@ async function showArticleForm(articleId) {
         document.getElementById('articleFormTitle').textContent = 'Редактирование статьи';
         try {
             if (!allArticleSections || allArticleSections.length === 0) await loadArticleSections();
+            if (!allArticleSubsections || allArticleSubsections.length === 0) await loadArticleSubsections();
             const response = await axios.get(`/api/articles/${articleId}`);
             if (response.data.success) {
                 const a = response.data.data;
@@ -2540,6 +2671,7 @@ async function showArticleForm(articleId) {
                 document.getElementById('articlePublishedAt').value = pubDate;
                 const selectedIds = (a.sections || []).map(s => s.id);
                 renderSectionCheckboxes(selectedIds);
+                renderSubsectionSelect(a.subsection ? a.subsection.id : null);
                 // Ждём инициализации TinyMCE перед вставкой контента
                 tinymce.get('articleContent')?.on('init', () => {
                     tinymce.get('articleContent').setContent(a.content || '');
@@ -2556,6 +2688,7 @@ async function showArticleForm(articleId) {
     } else {
         document.getElementById('articleFormTitle').textContent = 'Новая статья';
         renderSectionCheckboxes([]);
+        renderSubsectionSelect(null);
     }
 }
 
@@ -2580,13 +2713,15 @@ async function saveArticle() {
     const content = ed ? ed.getContent() : (document.getElementById('articleContent').value || '');
     const sectionIds = getSelectedSectionIds();
     const publishedAt = document.getElementById('articlePublishedAt').value || new Date().toISOString().substring(0, 10);
+    const subsectionVal = document.getElementById('articleSubsectionSelect')?.value;
+    const subsectionId = subsectionVal ? parseInt(subsectionVal, 10) : null;
 
     try {
         let response;
         if (articleId) {
-            response = await axios.put(`/api/articles/${articleId}`, { title, content, sectionIds, publishedAt });
+            response = await axios.put(`/api/articles/${articleId}`, { title, content, sectionIds, subsectionId, publishedAt });
         } else {
-            response = await axios.post('/api/articles', { title, content, sectionIds, publishedAt });
+            response = await axios.post('/api/articles', { title, content, sectionIds, subsectionId, publishedAt });
         }
         if (response.data.success) {
             showSuccess('Статья сохранена');

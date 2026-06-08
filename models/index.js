@@ -7,6 +7,7 @@ const Role = require('./Role');
 const AuditEvent = require('./AuditEvent')(sequelize);
 const Article = require('./Article');
 const ArticleSection = require('./ArticleSection');
+const ArticleSubsection = require('./ArticleSubsection');
 const HeaderImage = require('./HeaderImage');
 const Organization = require('./Organization');
 
@@ -80,6 +81,9 @@ Role.belongsTo(Organization, { foreignKey: 'organizationId', as: 'organization' 
 Article.belongsTo(User, { as: 'author', foreignKey: 'authorId' });
 User.hasMany(Article, { as: 'articles', foreignKey: 'authorId' });
 
+Article.belongsTo(ArticleSubsection, { as: 'subsection', foreignKey: 'subsectionId' });
+ArticleSubsection.hasMany(Article, { as: 'articles', foreignKey: 'subsectionId' });
+
 Article.belongsToMany(ArticleSection, {
     through: 'article_section_assignments',
     foreignKey: 'article_id',
@@ -106,6 +110,7 @@ module.exports = {
     AuditEvent,
     Article,
     ArticleSection,
+    ArticleSubsection,
     HeaderImage,
     Organization
 };
