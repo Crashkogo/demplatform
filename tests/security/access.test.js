@@ -80,3 +80,28 @@ test('DELETE /api/roles/:id с привязанными пользователя
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
 });
+
+// Тест H4: создание пользователя атомарно — user и roles создаются вместе
+test('POST /api/admin/users создаёт пользователя с ролями атомарно', async () => {
+    const { User } = require('../../models');
+
+    const res = await request(app)
+        .post('/api/admin/users')
+        .set('Cookie', adminCookie)
+        .send({
+            login: 'atomic_user',
+            password: 'password123',
+            roleIds: [fixtures.regularRole.id]
+        });
+
+    expect(res.status).toBe(201);
+
+    // Verify user has roles in DB
+    const user = await User.findOne({
+        where: { login: 'atomic_user' },
+        include: [{ association: 'roles' }]
+    });
+    expect(user).not.toBeNull();
+    expect(user.roles).toHaveLength(1);
+    expect(user.roles[0].id).toBe(fixtures.regularRole.id);
+});

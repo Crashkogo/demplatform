@@ -232,9 +232,16 @@ router.post('/users', [writeLimiter, authenticateToken, requireAdmin, ...userVal
             });
         }
 
-        const user = new User({ login, password, organizationId: organizationId ? parseInt(organizationId) : null });
-        await user.save();
-        await user.setRoles(roleIds.map(Number));
+        const user = await sequelize.transaction(async (t) => {
+            const newUser = new User({
+                login,
+                password,
+                organizationId: organizationId ? parseInt(organizationId) : null
+            });
+            await newUser.save({ transaction: t });
+            await newUser.setRoles(roleIds.map(Number), { transaction: t });
+            return newUser;
+        });
 
         res.status(201).json({
             success: true,
