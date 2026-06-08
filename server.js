@@ -137,6 +137,18 @@ const initializeDatabase = async () => {
     }
 };
 
+// Определяем локальный IP для вывода в консоль
+const getLocalIP = () => {
+    const ifaces = os.networkInterfaces();
+    for (const iface of Object.values(ifaces)) {
+        for (const addr of iface) {
+            if (addr.family === 'IPv4' && !addr.internal) return addr.address;
+        }
+    }
+    return 'localhost';
+};
+const localIP = getLocalIP();
+
 // Функция запуска сервера
 const startServer = async () => {
     try {
