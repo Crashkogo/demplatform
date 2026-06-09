@@ -288,6 +288,38 @@
         .badge {
             font-size: 0.8em;
         }
+
+        /* ── Компактная вёрстка для экранов 4:3 (≤1100px) ── */
+        @media (max-width: 1100px) {
+            /* Таблица статей */
+            .articles-table { font-size: 0.82rem; }
+            .articles-table th, .articles-table td { padding: 0.35rem 0.4rem; }
+
+            .articles-table .col-sections  { width: 140px; max-width: 140px; }
+            .articles-table .col-subsection { width: 70px;  max-width: 70px;  white-space: nowrap; }
+            .articles-table .col-author     { width: 70px;  max-width: 70px;  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .articles-table .col-date       { width: 68px;  max-width: 68px;  white-space: nowrap; }
+            .articles-table .col-actions    { width: 70px;  max-width: 70px;  white-space: nowrap; }
+
+            /* Разделы: компактная версия видима, полная — скрыта */
+            .sections-full    { display: none !important; }
+            .sections-compact { display: inline !important; }
+
+            /* Боковая панель — чуть уже */
+            .sidebar-col { flex: 0 0 20%; max-width: 20%; }
+            .content-col { flex: 0 0 80%; max-width: 80%; }
+
+            /* Кнопки шапки статей — иконки без текста */
+            #manageSectionsBtn .btn-text,
+            #manageSubsectionsBtn .btn-text,
+            #addArticleBtn .btn-text { display: none; }
+        }
+
+        @media (min-width: 1101px) {
+            /* На широких экранах компактная версия скрыта */
+            .sections-compact { display: none !important; }
+            .sections-full    { display: inline !important; }
+        }
     </style>
 </head>
 
@@ -333,7 +365,7 @@
     <div class="container-fluid px-3 py-3">
         <div class="row g-3">
             <!-- Боковая панель -->
-            <div class="col-lg-3">
+            <div class="col-lg-3 sidebar-col">
                 <div class="sidebar p-3">
                     <h5 class="mb-3">
                         <i class="bi bi-gear-fill me-2 text-primary"></i>
@@ -400,7 +432,7 @@
             </div>
 
             <!-- Основное содержимое -->
-            <div class="col-lg-9">
+            <div class="col-lg-9 content-col">
                 <div class="main-content p-4">
 
                     <!-- Панель управления -->
@@ -741,13 +773,13 @@
                             </h2>
                             <div class="d-flex gap-2">
                                 <button class="btn btn-outline-secondary" id="manageSectionsBtn">
-                                    <i class="bi bi-tags me-1"></i>Разделы
+                                    <i class="bi bi-tags me-1"></i><span class="btn-text">Разделы</span>
                                 </button>
                                 <button class="btn btn-outline-secondary" id="manageSubsectionsBtn">
-                                    <i class="bi bi-tag me-1"></i>Под-разделы
+                                    <i class="bi bi-tag me-1"></i><span class="btn-text">Под-разделы</span>
                                 </button>
                                 <button class="btn btn-primary" id="addArticleBtn">
-                                    <i class="bi bi-plus-circle me-2"></i>Новая статья
+                                    <i class="bi bi-plus-circle me-2"></i><span class="btn-text">Новая статья</span>
                                 </button>
                             </div>
                         </div>
@@ -812,15 +844,15 @@
                         <!-- Список статей -->
                         <div id="articlesListView">
                             <div class="table-responsive">
-                                <table class="table">
+                                <table class="table articles-table">
                                     <thead>
                                         <tr>
                                             <th>Заголовок</th>
-                                            <th>Разделы</th>
-                                            <th>Под-раздел</th>
-                                            <th>Автор</th>
-                                            <th>Дата</th>
-                                            <th>Действия</th>
+                                            <th class="col-sections">Разделы</th>
+                                            <th class="col-subsection">Под-раздел</th>
+                                            <th class="col-author">Автор</th>
+                                            <th class="col-date">Дата</th>
+                                            <th class="col-actions">Действия</th>
                                         </tr>
                                     </thead>
                                     <tbody id="articlesTableBody">

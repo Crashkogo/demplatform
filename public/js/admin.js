@@ -2410,9 +2410,25 @@ function renderArticles(articles, append = false, total = 0) {
     const canEdit = PermissionsManager.has('canCreateArticles');
     articles.forEach(a => {
         const date = new Date(a.publishedAt || a.createdAt).toLocaleDateString('ru-RU');
-        const sections = (a.sections || []).map(s => `<span class="badge bg-secondary me-1">${escapeHtml(s.name)}</span>`).join('');
+        const sectionList = a.sections || [];
+
+        // Полный вид (широкие экраны)
+        const sectionsFull = sectionList.map(s => `<span class="badge bg-secondary me-1">${escapeHtml(s.name)}</span>`).join('');
+
+        // Компактный вид (4:3, ≤1100px): первый раздел до 14 символов + счётчик остальных
+        let sectionsCompact = '—';
+        if (sectionList.length > 0) {
+            const firstName = sectionList[0].name;
+            const short = firstName.length > 14 ? firstName.slice(0, 13) + '…' : firstName;
+            const rest = sectionList.length > 1 ? ` <span class="badge bg-secondary">+${sectionList.length - 1}</span>` : '';
+            sectionsCompact = `<span class="badge bg-secondary">${escapeHtml(short)}</span>${rest}`;
+        }
+
+        const sections = `<span class="sections-full">${sectionsFull || '—'}</span><span class="sections-compact">${sectionsCompact}</span>`;
         const subsection = a.subsection ? `<span class="badge bg-info text-dark">${escapeHtml(a.subsection.name)}</span>` : '—';
         const author = a.author ? escapeHtml(a.author.login) : '—';
+        // Компактная дата: дд.мм.гг
+        const dateShort = new Date(a.publishedAt || a.createdAt).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit', year:'2-digit' });
         let actions = '';
         if (canEdit) {
             actions = `
@@ -2423,11 +2439,11 @@ function renderArticles(articles, append = false, total = 0) {
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${escapeHtml(a.title)}</td>
-            <td>${sections || '—'}</td>
-            <td>${subsection}</td>
-            <td>${author}</td>
-            <td>${date}</td>
-            <td>${actions || '—'}</td>
+            <td class="col-sections">${sections}</td>
+            <td class="col-subsection">${subsection}</td>
+            <td class="col-author">${author}</td>
+            <td class="col-date">${dateShort}</td>
+            <td class="col-actions">${actions || '—'}</td>
         `;
         tbody.appendChild(row);
     });
