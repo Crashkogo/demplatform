@@ -6,6 +6,7 @@ const { authenticateToken, requireAdmin, invalidateUserCache, invalidateUserSess
 const { checkAccess, addAccessibleCategories } = require('../middleware/authorization');
 const { writeLimiter } = require('../middleware/rateLimiter');
 const logger = require('../utils/logger');
+const { logEvent } = require('../services/auditService');
 
 const router = express.Router();
 
