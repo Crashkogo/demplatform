@@ -237,6 +237,12 @@ function initializeEventListeners() {
     document.getElementById('materialCategoryFilter').addEventListener('change', searchMaterials);
     document.getElementById('materialTypeFilter').addEventListener('change', searchMaterials);
 
+    // Чекбокс "выбрать все" в таблице материалов
+    document.getElementById('selectAllMaterials').addEventListener('change', function () {
+        document.querySelectorAll('.material-select-cb').forEach(cb => { cb.checked = this.checked; });
+        updateMaterialSelection();
+    });
+
     // Модальные окна
     initializeModalHandlers();
 
@@ -1337,8 +1343,14 @@ function renderMaterials(materials) {
     const tbody = document.getElementById('materialsTableBody');
     tbody.innerHTML = '';
 
+    // Сбрасываем выделение
+    const selectAll = document.getElementById('selectAllMaterials');
+    if (selectAll) { selectAll.checked = false; selectAll.indeterminate = false; }
+    const btn = document.getElementById('deleteSelectedBtn');
+    if (btn) btn.classList.add('d-none');
+
     if (materials.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Материалы не найдены</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Материалы не найдены</td></tr>';
         return;
     }
 
@@ -1391,7 +1403,13 @@ function renderMaterials(materials) {
             }
         }
 
+        const canDelete = PermissionsManager.canDoInCategory('canDeleteMaterials', materialCategoryId);
+        const checkboxCell = canDelete
+            ? `<td><input type="checkbox" class="material-select-cb" data-id="${material.id}" onchange="updateMaterialSelection()"></td>`
+            : `<td></td>`;
+
         row.innerHTML = `
+            ${checkboxCell}
             <td>
                 <div class="d-flex align-items-center">
                     <i class="bi ${typeIcon} me-2 text-${getFileTypeColor(material.fileType)}"></i>
@@ -1473,6 +1491,51 @@ async function deleteMaterial(materialId) {
         console.error('Ошибка удаления материала:', error);
         showError(error.response?.data?.message || 'Ошибка удаления материала');
     }
+}
+
+// Обновление состояния кнопки массового удаления
+function updateMaterialSelection() {
+    const checked = document.querySelectorAll('.material-select-cb:checked');
+    const btn = document.getElementById('deleteSelectedBtn');
+    const counter = document.getElementById('selectedCount');
+    if (btn) {
+        counter.textContent = checked.length;
+        btn.classList.toggle('d-none', checked.length === 0);
+    }
+
+    // Синхронизируем чекбокс "выбрать все"
+    const all = document.querySelectorAll('.material-select-cb');
+    const selectAll = document.getElementById('selectAllMaterials');
+    if (selectAll && all.length > 0) {
+        selectAll.checked = checked.length === all.length;
+        selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+    }
+}
+
+// Массовое удаление выбранных материалов
+async function deleteSelectedMaterials() {
+    const checked = Array.from(document.querySelectorAll('.material-select-cb:checked'));
+    if (checked.length === 0) return;
+
+    const ids = checked.map(cb => parseInt(cb.dataset.id));
+    if (!confirm(`Вы уверены, что хотите удалить ${ids.length} материал(ов)? Это действие необратимо.`)) return;
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const id of ids) {
+        try {
+            await axios.delete(`/api/materials/${id}`);
+            successCount++;
+        } catch {
+            errorCount++;
+        }
+    }
+
+    if (successCount > 0) showSuccess(`Удалено материалов: ${successCount}`);
+    if (errorCount > 0) showError(`Не удалось удалить: ${errorCount}`);
+
+    await loadMaterials();
 }
 
 // Загрузка раздела загрузки
@@ -1998,6 +2061,8 @@ window.editCategory = editCategory;
 window.deleteCategory = deleteCategory;
 window.editMaterial = editMaterial;
 window.deleteMaterial = deleteMaterial;
+window.deleteSelectedMaterials = deleteSelectedMaterials;
+window.updateMaterialSelection = updateMaterialSelection;
 window.viewMaterial = viewMaterial;
 
 
