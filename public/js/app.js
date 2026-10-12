@@ -916,25 +916,7 @@ function setupFuseSearch() {
 
 // Выполнение поиска
 function performSearch() {
-    const searchQuery = document.getElementById('searchInput').value.trim();
-    const fileType = document.getElementById('fileTypeFilter').value;
-
-    if (searchQuery) {
-        // Используем Fuse.js для нечеткого поиска
-        const results = fuse.search(searchQuery);
-        filteredMaterials = results.map(result => result.item);
-    } else {
-        filteredMaterials = [...allMaterials];
-    }
-
-    // Фильтрация по типу файла
-    if (fileType) {
-        filteredMaterials = filteredMaterials.filter(material => material.fileType === fileType);
-    }
-
-    // Обновляем отображение
-    renderFilteredMaterials();
-    updateStats();
+    loadMaterials();
 }
 
 // Отображение отфильтрованных материалов
