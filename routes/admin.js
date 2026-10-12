@@ -351,13 +351,20 @@ router.delete('/users/:id', [writeLimiter, authenticateToken, requireAdmin], asy
 
         invalidateUserCache(user.id);
 
+        const deletedLogin = user.login;
+
         // Удаляем audit_events пользователя (FK не позволяет удалить с записями)
         await AuditEvent.destroy({ where: { userId: user.id } });
 
         // Переназначаем материалы пользователя на текущего администратора
-        await Material.update({ uploadedBy: req.user.id }, { where: { uploadedBy: user.id } });
+        const [reassignedCount] = await Material.update({ uploadedBy: req.user.id }, { where: { uploadedBy: user.id } });
 
         await user.destroy();
+
+        logEvent(req.user.id, 'DELETE_USER', {
+            'Удалённый пользователь': deletedLogin,
+            'Перенесено материалов': reassignedCount
+        });
 
         res.json({
             success: true,

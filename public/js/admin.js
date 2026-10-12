@@ -2094,7 +2094,8 @@ function renderHistoryLogs(logs) {
         CREATE_MATERIAL: 'Создание материала',
         UPDATE_MATERIAL: 'Редактирование материала',
         DELETE_MATERIAL: 'Удаление материала',
-        DOWNLOAD_MATERIAL: 'Скачивание материала'
+        DOWNLOAD_MATERIAL: 'Скачивание материала',
+        DELETE_USER: 'Удаление пользователя'
     };
 
     logs.forEach(log => {
