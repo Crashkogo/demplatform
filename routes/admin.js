@@ -350,6 +350,13 @@ router.delete('/users/:id', [writeLimiter, authenticateToken, requireAdmin], asy
         }
 
         invalidateUserCache(user.id);
+
+        // Удаляем audit_events пользователя (FK не позволяет удалить с записями)
+        await AuditEvent.destroy({ where: { userId: user.id } });
+
+        // Переназначаем материалы пользователя на текущего администратора
+        await Material.update({ uploadedBy: req.user.id }, { where: { uploadedBy: user.id } });
+
         await user.destroy();
 
         res.json({
