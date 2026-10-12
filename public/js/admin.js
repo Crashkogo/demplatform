@@ -243,6 +243,13 @@ function initializeEventListeners() {
         updateMaterialSelection();
     });
 
+    // Event delegation для индивидуальных чекбоксов материалов
+    document.getElementById('materialsTableBody').addEventListener('change', function (e) {
+        if (e.target.classList.contains('material-select-cb')) {
+            updateMaterialSelection();
+        }
+    });
+
     // Модальные окна
     initializeModalHandlers();
 
@@ -1405,7 +1412,7 @@ function renderMaterials(materials) {
 
         const canDelete = PermissionsManager.canDoInCategory('canDeleteMaterials', materialCategoryId);
         const checkboxCell = canDelete
-            ? `<td><input type="checkbox" class="material-select-cb" data-id="${material.id}" onchange="updateMaterialSelection()"></td>`
+            ? `<td><input type="checkbox" class="material-select-cb" data-id="${material.id}"></td>`
             : `<td></td>`;
 
         row.innerHTML = `
@@ -2062,7 +2069,6 @@ window.deleteCategory = deleteCategory;
 window.editMaterial = editMaterial;
 window.deleteMaterial = deleteMaterial;
 window.deleteSelectedMaterials = deleteSelectedMaterials;
-window.updateMaterialSelection = updateMaterialSelection;
 window.viewMaterial = viewMaterial;
 
 
