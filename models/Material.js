@@ -207,7 +207,7 @@ Material.init({
         defaultValue: true
     },
     tags: {
-        type: DataTypes.JSON,
+        type: DataTypes.JSONB,
         defaultValue: []
     }
 }, {
