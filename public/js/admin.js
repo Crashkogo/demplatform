@@ -1906,9 +1906,18 @@ async function logout() {
 
 // Функция просмотра материала (переход в основное приложение)
 function viewMaterial(materialId) {
-    // Открываем материал в основном приложении
-    const url = `/app.html?material=${materialId}`;
-    window.open(url, '_blank');
+    const material = allMaterials.find(m => m.id === materialId);
+    const title = material ? material.title : 'Просмотр материала';
+    document.getElementById('materialViewerTitle').textContent = title;
+    document.getElementById('materialViewerFrame').src = `/api/materials/${materialId}/view`;
+    const modal = new bootstrap.Modal(document.getElementById('materialViewerModal'));
+    modal.show();
+
+    // Очищаем iframe при закрытии модала (освобождаем ресурсы)
+    document.getElementById('materialViewerModal').addEventListener('hidden.bs.modal', function onHide() {
+        document.getElementById('materialViewerFrame').src = '';
+        this.removeEventListener('hidden.bs.modal', onHide);
+    });
 }
 
 // Редактирование материала
